@@ -1,0 +1,152 @@
+#include "Renderer.hpp"
+#include <stdexcept>
+#include <vulkan/vulkan_core.h>
+
+namespace rend
+{
+   #ifdef DEBUG
+    bool enableValidationLayers = true;
+  #else
+    bool enableValidationLayers = false;
+  #endif
+
+  std::vector<const char*> instanceLayers = {
+    
+  #ifdef DEBUG
+  "VK_LAYER_KHRONOS_validation"
+  #endif
+  };
+  
+  std::vector<const char*> instanceExtensions = {
+  
+  #ifdef DEBUG
+  VK_EXT_DEBUG_UTILS_EXTENSION_NAME
+  #endif
+  };
+
+  std::vector<const char*> deviceLayers = {};
+  std::vector<const char*> deviceExtensions = {};
+
+  void Renderer::createVulkanInstance()
+  {
+    VkApplicationInfo appInfo{};
+    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    appInfo.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
+    appInfo.apiVersion = VK_API_VERSION_1_4;
+    appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    appInfo.pEngineName = "None";
+
+    VkInstanceCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    createInfo.pApplicationInfo = &appInfo;
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size());
+    createInfo.ppEnabledExtensionNames = instanceExtensions.data();
+    createInfo.enabledLayerCount = static_cast<uint32_t>(instanceLayers.size());
+    createInfo.ppEnabledLayerNames = instanceLayers.data();
+    
+    vkCreateInstance(&createInfo, nullptr, &mInstance); 
+  }
+  void Renderer::pickPhysicalDevice()
+  {
+    std::vector<VkPhysicalDevice> devices{};
+    uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(mInstance, &deviceCount, devices.data());
+    
+    std::multimap<uint32_t, VkPhysicalDevice> candidates{};
+
+    for(const VkPhysicalDevice& device : devices)
+    {
+      uint32_t score = 0;
+      VkPhysicalDeviceProperties props;
+      vkGetPhysicalDeviceProperties(device, &props);
+      
+      VkPhysicalDeviceFeatures features;
+      vkGetPhysicalDeviceFeatures(device, &features);
+
+      std::cout << "Evaluating Physical Device Capability: " << props.deviceName << ";\n";
+    
+      if(!features.geometryShader)
+        continue;
+        
+      QueueFamilyIndices familyIndices = findQueueFamilies(device);
+      if(!familyIndices.isComplete())
+        continue;
+
+      if(props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+        score += 1000;
+
+      score += props.limits.maxImageDimension2D;
+
+      candidates.insert(std::make_pair(score, device));
+    }
+
+    if(candidates.rbegin()->first > 0)
+      mPhysicalDevice = candidates.rbegin()->second;
+    else throw(std::runtime_error("Failed to find a suitable GPU!"));
+   
+  }
+  void Renderer::createLogicalDevice()
+  {
+    QueueFamilyIndices familyIndices = findQueueFamilies(mPhysicalDevice);
+    float queuePriorities = 1.0f;
+
+    VkDeviceQueueCreateInfo graphicsQueueCreateInfo{};
+    graphicsQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    graphicsQueueCreateInfo.queueCount = 1;
+    graphicsQueueCreateInfo.queueFamilyIndex = familyIndices.graphicsFamily.value();
+    graphicsQueueCreateInfo.pQueuePriorities = &queuePriorities;
+
+    VkDeviceQueueCreateInfo computeQueueCreateInfo{};
+    computeQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    computeQueueCreateInfo.queueCount = 1;
+    computeQueueCreateInfo.queueFamilyIndex = familyIndices.computeFamily.value();
+    computeQueueCreateInfo.pQueuePriorities = &queuePriorities;
+
+    VkDeviceQueueCreateInfo transferQueueCreateInfo{};
+    transferQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    transferQueueCreateInfo.queueCount = 1;
+    transferQueueCreateInfo.queueFamilyIndex = familyIndices.transferFamily.value();
+    transferQueueCreateInfo.pQueuePriorities = &queuePriorities;
+
+    VkDeviceQueueCreateInfo queueCreateInfos[] = {graphicsQueueCreateInfo, computeQueueCreateInfo, transferQueueCreateInfo};
+
+    VkDeviceCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    createInfo.queueCreateInfoCount = 3;
+    createInfo.pQueueCreateInfos = queueCreateInfos;
+    createInfo.enabledLayerCount = static_cast<uint32_t>(deviceLayers.size());
+    createInfo.ppEnabledLayerNames = deviceLayers.data();
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+    createInfo.ppEnabledExtensionNames = deviceExtensions.data();
+    
+    if(vkCreateDevice(mPhysicalDevice, &createInfo, nullptr, &mDevice) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create logical device!");
+  }
+  QueueFamilyIndices Renderer::findQueueFamilies(VkPhysicalDevice device)
+  {
+    QueueFamilyIndices indices;
+    
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+    std::vector<VkQueueFamilyProperties> queueFamilyProperties{};
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilyProperties.data());
+    
+    int i = 0;
+    for(const auto& qfp : queueFamilyProperties)
+    {
+      if(qfp.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+        indices.graphicsFamily = i;
+
+      if(qfp.queueFlags & VK_QUEUE_COMPUTE_BIT)
+        indices.computeFamily = i;
+
+      if(qfp.queueFlags & VK_QUEUE_TRANSFER_BIT)
+        indices.transferFamily = i;
+
+      i++;
+    }
+
+    return indices;
+  }
+}
