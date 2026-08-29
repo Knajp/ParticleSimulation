@@ -11,6 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Vulkan REQUIRED)
+find_package(glfw3 REQUIRED)
 
 add_executable(particle-sim 
   src/main.cpp
@@ -23,5 +24,6 @@ target_include_directories(particle-sim PRIVATE
 )
 target_link_libraries(particle-sim PRIVATE
   Vulkan::Vulkan
+  glfw
 )
 
