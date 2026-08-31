@@ -1,7 +1,8 @@
 #ifndef RENDERER_HPP
 #define RENDERER_HPP
 
-#include <vulkan/vulkan.h>
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
 #include <vector>
 #include <map>
 #include <iostream>
@@ -29,15 +30,18 @@ namespace rend
       return instance;
     }
     
-    void Init()
+    void Init(GLFWwindow* window)
     {
       createVulkanInstance();
+      pickPhysicalDevice();
       createLogicalDevice();
-
+      createWindowSurface(window);
+      
     }
     
     void Terminate()
     {
+      vkDestroySurfaceKHR(mInstance, mWindowSurface, nullptr);
       vkDestroyDevice(mDevice, nullptr);
       vkDestroyInstance(mInstance, nullptr);
     }
@@ -46,6 +50,7 @@ namespace rend
     void pickPhysicalDevice();
     void createLogicalDevice();
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+    void createWindowSurface(GLFWwindow* window);
   private:
     VkInstance mInstance;
     VkPhysicalDevice mPhysicalDevice;
@@ -54,6 +59,8 @@ namespace rend
     VkQueue mGraphicsQueue;
     VkQueue mComputeQueue;
     VkQueue mTransferQueue;
+
+    VkSurfaceKHR mWindowSurface;
   };
 }
 

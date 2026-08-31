@@ -17,6 +17,7 @@ add_executable(particle-sim
   src/main.cpp
   src/Renderer/Renderer.cpp
   src/Application.cpp
+  src/Window.cpp
 )
 
 target_include_directories(particle-sim PRIVATE
@@ -25,5 +26,9 @@ target_include_directories(particle-sim PRIVATE
 target_link_libraries(particle-sim PRIVATE
   Vulkan::Vulkan
   glfw
+)
+
+target_compile_definitions(particle-sim PRIVATE
+  GLFW_INCLUDE_VULKAN
 )
 

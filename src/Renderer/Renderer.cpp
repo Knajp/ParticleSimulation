@@ -1,7 +1,8 @@
 #include "Renderer.hpp"
+#include <GLFW/glfw3.h>
 #include <stdexcept>
 #include <vulkan/vulkan_core.h>
-
+#include <cassert>
 namespace rend
 {
    #ifdef DEBUG
@@ -35,6 +36,14 @@ namespace rend
     appInfo.apiVersion = VK_API_VERSION_1_4;
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.pEngineName = "None";
+    
+    uint32_t glfwExtensionCount = 0;
+    const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    if(!glfwExtensions)
+      throw std::runtime_error("Failed to get GLFW Vulkan extensions!");
+
+    for(uint32_t i = 0; i < glfwExtensionCount; i++)
+      instanceExtensions.push_back(glfwExtensions[i]);
 
     VkInstanceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -48,11 +57,15 @@ namespace rend
   }
   void Renderer::pickPhysicalDevice()
   {
-    std::vector<VkPhysicalDevice> devices{};
     uint32_t deviceCount = 0;
+    vkEnumeratePhysicalDevices(mInstance, &deviceCount, nullptr);
+    std::vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(mInstance, &deviceCount, devices.data());
     
     std::multimap<uint32_t, VkPhysicalDevice> candidates{};
+    
+    assert(deviceCount > 0);
+    assert(devices.size() > 0);
 
     for(const VkPhysicalDevice& device : devices)
     {
@@ -66,11 +79,17 @@ namespace rend
       std::cout << "Evaluating Physical Device Capability: " << props.deviceName << ";\n";
     
       if(!features.geometryShader)
+      {
+        std::cout << "No geometry shader support\n";
         continue;
+      }
         
       QueueFamilyIndices familyIndices = findQueueFamilies(device);
       if(!familyIndices.isComplete())
+      {
+        std::cout << "Incomplete queue indices!\n";
         continue;
+      }
 
       if(props.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
         score += 1000;
@@ -79,6 +98,8 @@ namespace rend
 
       candidates.insert(std::make_pair(score, device));
     }
+    
+    assert(candidates.size() > 0);
 
     if(candidates.rbegin()->first > 0)
       mPhysicalDevice = candidates.rbegin()->second;
@@ -122,6 +143,7 @@ namespace rend
     if(vkCreateDevice(mPhysicalDevice, &createInfo, nullptr, &mDevice) != VK_SUCCESS)
       throw std::runtime_error("Failed to create logical device!");
   }
+
   QueueFamilyIndices Renderer::findQueueFamilies(VkPhysicalDevice device)
   {
     QueueFamilyIndices indices;
@@ -129,7 +151,7 @@ namespace rend
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
 
-    std::vector<VkQueueFamilyProperties> queueFamilyProperties{};
+    std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilyProperties.data());
     
     int i = 0;
@@ -137,10 +159,8 @@ namespace rend
     {
       if(qfp.queueFlags & VK_QUEUE_GRAPHICS_BIT)
         indices.graphicsFamily = i;
-
       if(qfp.queueFlags & VK_QUEUE_COMPUTE_BIT)
         indices.computeFamily = i;
-
       if(qfp.queueFlags & VK_QUEUE_TRANSFER_BIT)
         indices.transferFamily = i;
 
@@ -149,4 +169,11 @@ namespace rend
 
     return indices;
   }
+
+  void Renderer::createWindowSurface(GLFWwindow* window)
+  {
+    if(glfwCreateWindowSurface(mInstance, window, nullptr, &mWindowSurface) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create GLFW window surface!");
+  }
 }
+

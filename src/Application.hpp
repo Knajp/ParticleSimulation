@@ -1,6 +1,9 @@
 #ifndef APPLICATION_HPP
 #define APPLICATION_HPP
   
+#include "Window.hpp"
+#include "Renderer/Renderer.hpp"
+
 namespace app
 {
   class Application
@@ -22,6 +25,10 @@ namespace app
     void init();
     void run();
     void terminate();
+
+  private:
+    Window mWindow;
+    ::rend::Renderer& mRenderer = rend::Renderer::getInstance();
   };
 }
 
