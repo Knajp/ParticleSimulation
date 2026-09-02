@@ -1,0 +1,4 @@
+.clangd
+.clangd.save
+build/
+compile_commands.json

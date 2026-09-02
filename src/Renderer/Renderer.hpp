@@ -15,10 +15,11 @@ namespace rend
     std::optional<uint32_t> graphicsFamily;
     std::optional<uint32_t> transferFamily;
     std::optional<uint32_t> computeFamily;
+    std::optional<uint32_t> presentFamily;
 
     bool isComplete()
     {
-      return graphicsFamily.has_value() && transferFamily.has_value() && computeFamily.has_value();
+      return graphicsFamily.has_value() && transferFamily.has_value() && computeFamily.has_value() && presentFamily.has_value();
     }
   };
   class Renderer
@@ -33,9 +34,9 @@ namespace rend
     void Init(GLFWwindow* window)
     {
       createVulkanInstance();
+      createWindowSurface(window);
       pickPhysicalDevice();
       createLogicalDevice();
-      createWindowSurface(window);
       
     }
     
@@ -51,6 +52,7 @@ namespace rend
     void createLogicalDevice();
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
     void createWindowSurface(GLFWwindow* window);
+    
   private:
     VkInstance mInstance;
     VkPhysicalDevice mPhysicalDevice;
@@ -59,6 +61,7 @@ namespace rend
     VkQueue mGraphicsQueue;
     VkQueue mComputeQueue;
     VkQueue mTransferQueue;
+    VkQueue mPresentQueue;
 
     VkSurfaceKHR mWindowSurface;
   };

@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <vulkan/vulkan_core.h>
 #include <cassert>
+#include <set>
 namespace rend
 {
    #ifdef DEBUG
@@ -128,20 +129,39 @@ namespace rend
     transferQueueCreateInfo.queueCount = 1;
     transferQueueCreateInfo.queueFamilyIndex = familyIndices.transferFamily.value();
     transferQueueCreateInfo.pQueuePriorities = &queuePriorities;
+    
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+    std::set<uint32_t> uniqueQueueIndices = {familyIndices.presentFamily.value(), familyIndices.graphicsFamily.value(), familyIndices.computeFamily.value(), familyIndices.transferFamily.value()};
 
-    VkDeviceQueueCreateInfo queueCreateInfos[] = {graphicsQueueCreateInfo, computeQueueCreateInfo, transferQueueCreateInfo};
+    for(const auto& idx : uniqueQueueIndices)
+    {
+      VkDeviceQueueCreateInfo queueCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .queueFamilyIndex = idx,
+        .queueCount = 1,
+        .pQueuePriorities = &queuePriorities,
+      };
+      queueCreateInfos.push_back(queueCreateInfo);
+    }
 
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    createInfo.queueCreateInfoCount = 3;
-    createInfo.pQueueCreateInfos = queueCreateInfos;
+    createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+    createInfo.pQueueCreateInfos = queueCreateInfos.data();
     createInfo.enabledLayerCount = static_cast<uint32_t>(deviceLayers.size());
     createInfo.ppEnabledLayerNames = deviceLayers.data();
     createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
     createInfo.ppEnabledExtensionNames = deviceExtensions.data();
-    
+   
     if(vkCreateDevice(mPhysicalDevice, &createInfo, nullptr, &mDevice) != VK_SUCCESS)
       throw std::runtime_error("Failed to create logical device!");
+    
+    vkGetDeviceQueue(mDevice, familyIndices.graphicsFamily.value(), 0, &mGraphicsQueue);
+    vkGetDeviceQueue(mDevice, familyIndices.presentFamily.value(), 0, &mPresentQueue);
+    vkGetDeviceQueue(mDevice, familyIndices.computeFamily.value(), 0, &mComputeQueue);
+    vkGetDeviceQueue(mDevice, familyIndices.transferFamily.value(), 0, &mTransferQueue);
   }
 
   QueueFamilyIndices Renderer::findQueueFamilies(VkPhysicalDevice device)
@@ -163,7 +183,12 @@ namespace rend
         indices.computeFamily = i;
       if(qfp.queueFlags & VK_QUEUE_TRANSFER_BIT)
         indices.transferFamily = i;
+      
+      VkBool32 presentSupport = false;
+      vkGetPhysicalDeviceSurfaceSupportKHR(device, static_cast<uint32_t>(i), mWindowSurface, &presentSupport);
 
+      if(presentSupport)
+        indices.presentFamily = i;
       i++;
     }
 
