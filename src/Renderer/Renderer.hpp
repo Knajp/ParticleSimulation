@@ -1,12 +1,9 @@
 #ifndef RENDERER_HPP
 #define RENDERER_HPP
 
-#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-#include <vector>
-#include <map>
-#include <iostream>
 #include <optional>
+#include <vector>
 
 namespace rend
 {
@@ -17,11 +14,19 @@ namespace rend
     std::optional<uint32_t> computeFamily;
     std::optional<uint32_t> presentFamily;
 
-    bool isComplete()
+    bool isComplete() const
     {
       return graphicsFamily.has_value() && transferFamily.has_value() && computeFamily.has_value() && presentFamily.has_value();
     }
   };
+
+  struct SwapchainSupportDetails
+  {
+    VkSurfaceCapabilitiesKHR capabilities;
+    std::vector<VkSurfaceFormatKHR> surfaceFormats;
+    std::vector<VkPresentModeKHR> presentModes;
+  };
+
   class Renderer
   {
   public:
@@ -52,8 +57,8 @@ namespace rend
     void createLogicalDevice();
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
     void createWindowSurface(GLFWwindow* window);
-    
-  private:
+    static bool checkDeviceExtensionSupport(VkPhysicalDevice device); 
+    SwapchainSupportDetails querySwapchainSupport();
     VkInstance mInstance;
     VkPhysicalDevice mPhysicalDevice;
     VkDevice mDevice;
