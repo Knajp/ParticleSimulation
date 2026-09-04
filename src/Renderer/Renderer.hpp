@@ -47,6 +47,8 @@ namespace rend
     
     void Terminate()
     {
+      for(auto imageView : mSwapchainImageViews) // NOLINT
+        vkDestroyImageView(mDevice, imageView, nullptr);
       vkDestroySwapchainKHR(mDevice, mSwapchain, nullptr);
       vkDestroySurfaceKHR(mInstance, mWindowSurface, nullptr);
       vkDestroyDevice(mDevice, nullptr);
@@ -64,6 +66,7 @@ namespace rend
     static VkPresentModeKHR pickPresentMode(const std::vector<VkPresentModeKHR>& presentModes);
     static VkExtent2D chooseSwapchainExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window);
     void createSwapchain(GLFWwindow* window);
+    void createSwapchainImageViews();
 
     VkInstance mInstance;
     VkPhysicalDevice mPhysicalDevice;
@@ -80,6 +83,8 @@ namespace rend
     VkPresentModeKHR mSwapchainPresentMode;
     VkExtent2D mSwapchainExtent;
     VkSwapchainKHR mSwapchain;
+    std::vector<VkImage> mSwapchainImages;
+    std::vector<VkImageView> mSwapchainImageViews;
   };
 }
 

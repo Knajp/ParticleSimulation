@@ -1,6 +1,7 @@
 #include "Application.hpp"
 #include <GLFW/glfw3.h>
 #include <stdexcept>
+#include <iostream>
 
 void glfwErrorCallback(int num, const char* description)
 {
