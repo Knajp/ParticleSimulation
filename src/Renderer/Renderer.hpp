@@ -42,11 +42,12 @@ namespace rend
       createWindowSurface(window);
       pickPhysicalDevice();
       createLogicalDevice();
-      
+      createSwapchain(window);      
     }
     
     void Terminate()
     {
+      vkDestroySwapchainKHR(mDevice, mSwapchain, nullptr);
       vkDestroySurfaceKHR(mInstance, mWindowSurface, nullptr);
       vkDestroyDevice(mDevice, nullptr);
       vkDestroyInstance(mInstance, nullptr);
@@ -58,7 +59,12 @@ namespace rend
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
     void createWindowSurface(GLFWwindow* window);
     static bool checkDeviceExtensionSupport(VkPhysicalDevice device); 
-    SwapchainSupportDetails querySwapchainSupport();
+    SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device) const;
+    static VkSurfaceFormatKHR pickSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
+    static VkPresentModeKHR pickPresentMode(const std::vector<VkPresentModeKHR>& presentModes);
+    static VkExtent2D chooseSwapchainExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window);
+    void createSwapchain(GLFWwindow* window);
+
     VkInstance mInstance;
     VkPhysicalDevice mPhysicalDevice;
     VkDevice mDevice;
@@ -69,6 +75,11 @@ namespace rend
     VkQueue mPresentQueue;
 
     VkSurfaceKHR mWindowSurface;
+
+    VkSurfaceFormatKHR mSwapchainFormat;
+    VkPresentModeKHR mSwapchainPresentMode;
+    VkExtent2D mSwapchainExtent;
+    VkSwapchainKHR mSwapchain;
   };
 }
 

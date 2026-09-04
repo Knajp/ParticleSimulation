@@ -6,6 +6,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <vulkan/vulkan_core.h>
+#include <algorithm>
 
 namespace rend {
 #ifdef DEBUG
@@ -91,8 +92,15 @@ void Renderer::pickPhysicalDevice() {
       std::cout << "Incomplete queue indices!\n";
       continue;
     }
-    
+
     if(!checkDeviceExtensionSupport(device))
+      continue;
+ 
+    bool swapchainAdequate = false;
+    SwapchainSupportDetails swapchainDetails = querySwapchainSupport(device);
+    swapchainAdequate = !swapchainDetails.presentModes.empty() && !swapchainDetails.surfaceFormats.empty();
+    
+    if(!swapchainAdequate)
       continue;
 
     const int discreteBoost = 1000;
@@ -131,26 +139,6 @@ bool Renderer::checkDeviceExtensionSupport(VkPhysicalDevice device)
 void Renderer::createLogicalDevice() {
   QueueFamilyIndices familyIndices = findQueueFamilies(mPhysicalDevice);
   float queuePriorities = 1.0f;
-
-  VkDeviceQueueCreateInfo graphicsQueueCreateInfo{};
-  graphicsQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-  graphicsQueueCreateInfo.queueCount = 1;
-  graphicsQueueCreateInfo.queueFamilyIndex =
-      familyIndices.graphicsFamily.value();
-  graphicsQueueCreateInfo.pQueuePriorities = &queuePriorities;
-
-  VkDeviceQueueCreateInfo computeQueueCreateInfo{};
-  computeQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-  computeQueueCreateInfo.queueCount = 1;
-  computeQueueCreateInfo.queueFamilyIndex = familyIndices.computeFamily.value();
-  computeQueueCreateInfo.pQueuePriorities = &queuePriorities;
-
-  VkDeviceQueueCreateInfo transferQueueCreateInfo{};
-  transferQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-  transferQueueCreateInfo.queueCount = 1;
-  transferQueueCreateInfo.queueFamilyIndex =
-      familyIndices.transferFamily.value();
-  transferQueueCreateInfo.pQueuePriorities = &queuePriorities;
 
   std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
   std::set<uint32_t> uniqueQueueIndices = {
@@ -226,6 +214,110 @@ QueueFamilyIndices Renderer::findQueueFamilies(VkPhysicalDevice device) {
   return indices;
 }
 
+SwapchainSupportDetails Renderer::querySwapchainSupport(VkPhysicalDevice device) const
+{
+  SwapchainSupportDetails details;
+
+  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, mWindowSurface, &details.capabilities);
+
+  uint32_t formatCount = 0;
+  vkGetPhysicalDeviceSurfaceFormatsKHR(device, mWindowSurface, &formatCount, nullptr);
+  if(formatCount)
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, mWindowSurface, &formatCount, details.surfaceFormats.data());
+
+  uint32_t presentModeCount = 0;
+  vkGetPhysicalDeviceSurfacePresentModesKHR(device, mWindowSurface, &presentModeCount, nullptr);
+  if(presentModeCount)
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, mWindowSurface, &presentModeCount, details.presentModes.data());
+
+  return details;
+    bool swapchainAdequate = false;
+}
+
+VkSurfaceFormatKHR Renderer::pickSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats)
+{
+  for(const auto& format : formats)
+    if(format.format == VK_FORMAT_B8G8R8_SRGB && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+      return format;
+
+  return formats[0];
+}
+
+VkPresentModeKHR Renderer::pickPresentMode(const std::vector<VkPresentModeKHR>& presentModes)
+{
+  for(const auto& mode : presentModes)
+    if(mode == VK_PRESENT_MODE_MAILBOX_KHR)
+      return mode;
+
+  std::cout << "Mailbox present mode not found on device, defaulting to FIFO.\n";
+  return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+VkExtent2D Renderer::chooseSwapchainExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window)
+{
+  if(capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+    return capabilities.currentExtent;
+
+  int width, height; // NOLINT
+  glfwGetFramebufferSize(window, &width, &height);
+
+  VkExtent2D actualExtent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+  actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.height);
+  actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+  return actualExtent;
+}
+
+void Renderer::createSwapchain(GLFWwindow* window)
+{
+  SwapchainSupportDetails swapchainSupport = querySwapchainSupport(mPhysicalDevice);
+
+  mSwapchainExtent = chooseSwapchainExtent(swapchainSupport.capabilities, window);
+  mSwapchainFormat = pickSurfaceFormat(swapchainSupport.surfaceFormats);
+  mSwapchainPresentMode = pickPresentMode(swapchainSupport.presentModes);
+
+  uint32_t imageCount = swapchainSupport.capabilities.minImageCount + 1;
+  if(swapchainSupport.capabilities.maxImageCount > 0 && swapchainSupport.capabilities.maxImageCount < imageCount)
+    imageCount = swapchainSupport.capabilities.maxImageCount;
+
+  QueueFamilyIndices indices = findQueueFamilies(mPhysicalDevice);
+  uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(), indices.presentFamily.value()};
+
+  VkSharingMode imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  uint32_t queueFamilyCount = 0;
+  uint32_t* queueIndicesPtr = nullptr;
+
+  if(indices.graphicsFamily.value() != indices.presentFamily.value())
+  {
+    imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+    queueFamilyCount = 2;
+    queueIndicesPtr = queueFamilyIndices;
+  }
+
+  
+  VkSwapchainCreateInfoKHR createInfo{
+    .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+    .pNext = nullptr,
+    .flags = 0,
+    .surface = mWindowSurface,
+    .minImageCount = imageCount,
+    .imageFormat = mSwapchainFormat.format,
+    .imageColorSpace = mSwapchainFormat.colorSpace,
+    .imageExtent = mSwapchainExtent,
+    .imageArrayLayers = 1,
+    .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
+    .imageSharingMode = imageSharingMode,
+    .queueFamilyIndexCount = queueFamilyCount,
+    .pQueueFamilyIndices = queueIndicesPtr,
+    .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+    .presentMode = mSwapchainPresentMode,
+    .clipped = VK_TRUE,
+    .oldSwapchain = VK_NULL_HANDLE
+  };
+
+  if(vkCreateSwapchainKHR(mDevice, &createInfo, nullptr, &mSwapchain) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create swapchain.");
+}
 void Renderer::createWindowSurface(GLFWwindow *window) {
   if (glfwCreateWindowSurface(mInstance, window, nullptr, &mWindowSurface) !=
       VK_SUCCESS)
