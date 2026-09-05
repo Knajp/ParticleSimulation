@@ -1,9 +1,15 @@
 #ifndef RENDERER_HPP
 #define RENDERER_HPP
 
+#define GLFW_INCLUDE_VULKAN
+#define VK_NO_PROTOTYPES
 #include <GLFW/glfw3.h>
+#include <volk/volk.h>
+#include <vma/vk_mem_alloc.h>
+
 #include <optional>
 #include <vector>
+#include <limits>
 
 namespace rend
 {
@@ -50,6 +56,7 @@ namespace rend
       for(auto imageView : mSwapchainImageViews) // NOLINT
         vkDestroyImageView(mDevice, imageView, nullptr);
       vkDestroySwapchainKHR(mDevice, mSwapchain, nullptr);
+      vmaDestroyAllocator(mVmaAllocator);
       vkDestroySurfaceKHR(mInstance, mWindowSurface, nullptr);
       vkDestroyDevice(mDevice, nullptr);
       vkDestroyInstance(mInstance, nullptr);
@@ -67,8 +74,10 @@ namespace rend
     static VkExtent2D chooseSwapchainExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window);
     void createSwapchain(GLFWwindow* window);
     void createSwapchainImageViews();
+    void initializeVMA();
 
     VkInstance mInstance;
+    VmaAllocator mVmaAllocator;
     VkPhysicalDevice mPhysicalDevice;
     VkDevice mDevice;
   

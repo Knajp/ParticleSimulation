@@ -5,7 +5,6 @@
 #include <map>
 #include <iostream>
 #include <stdexcept>
-#include <vulkan/vulkan_core.h>
 #include <algorithm>
 
 namespace rend {
@@ -33,6 +32,8 @@ std::vector<const char *> deviceLayers = {};
 std::vector<const char *> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
 void Renderer::createVulkanInstance() {
+  volkInitialize();
+
   VkApplicationInfo appInfo{};
   appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   appInfo.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
@@ -59,6 +60,8 @@ void Renderer::createVulkanInstance() {
   createInfo.ppEnabledLayerNames = instanceLayers.data();
 
   vkCreateInstance(&createInfo, nullptr, &mInstance);
+
+  volkLoadInstance(mInstance);
 }
 void Renderer::pickPhysicalDevice() {
   uint32_t deviceCount = 0;
@@ -137,6 +140,21 @@ bool Renderer::checkDeviceExtensionSupport(VkPhysicalDevice device)
 }
 
 void Renderer::createLogicalDevice() {
+
+  VkPhysicalDeviceVulkan14Features supportedFeatures14{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES, .pNext = nullptr};
+  VkPhysicalDeviceVulkan13Features supportedFeatures13{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, .pNext = &supportedFeatures14};
+  VkPhysicalDeviceVulkan12Features supportedFeatures12{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, .pNext = &supportedFeatures13};
+  VkPhysicalDeviceFeatures2 supportedFeatures11{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &supportedFeatures12};
+  vkGetPhysicalDeviceFeatures2(mPhysicalDevice, &supportedFeatures11);
+
+  if(!supportedFeatures13.dynamicRendering || !supportedFeatures13.synchronization2 || !supportedFeatures12.timelineSemaphore)
+    throw std::runtime_error("Physical device doesn't match application Vulkan 1.X feature requirements.");
+
+  VkPhysicalDeviceVulkan14Features features14{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES, .pNext = nullptr};
+  VkPhysicalDeviceVulkan13Features features13{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, .pNext = &features14, .dynamicRendering = VK_TRUE, .synchronization2 = VK_TRUE};
+  VkPhysicalDeviceVulkan12Features features12{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, .pNext = &features13, .timelineSemaphore = VK_TRUE};
+  VkPhysicalDeviceFeatures2 features11{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &features12};
+
   QueueFamilyIndices familyIndices = findQueueFamilies(mPhysicalDevice);
   float queuePriorities = 1.0f;
 
@@ -158,15 +176,15 @@ void Renderer::createLogicalDevice() {
     queueCreateInfos.push_back(queueCreateInfo);
   }
 
+  
   VkDeviceCreateInfo createInfo{};
   createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  createInfo.queueCreateInfoCount =
-      static_cast<uint32_t>(queueCreateInfos.size());
+  createInfo.pNext = &features11;
+  createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
   createInfo.pQueueCreateInfos = queueCreateInfos.data();
   createInfo.enabledLayerCount = static_cast<uint32_t>(deviceLayers.size());
   createInfo.ppEnabledLayerNames = deviceLayers.data();
-  createInfo.enabledExtensionCount =
-      static_cast<uint32_t>(deviceExtensions.size());
+  createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
   createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
   if (vkCreateDevice(mPhysicalDevice, &createInfo, nullptr, &mDevice) !=
@@ -187,19 +205,18 @@ QueueFamilyIndices Renderer::findQueueFamilies(VkPhysicalDevice device) {
   QueueFamilyIndices indices;
 
   uint32_t queueFamilyCount = 0;
-  vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+  vkGetPhysicalDeviceQueueFamilyProperties2(device, &queueFamilyCount, nullptr);
 
-  std::vector<VkQueueFamilyProperties> queueFamilyProperties(queueFamilyCount);
-  vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
-                                           queueFamilyProperties.data());
+  std::vector<VkQueueFamilyProperties2> queueFamilyProperties(queueFamilyCount);
+  vkGetPhysicalDeviceQueueFamilyProperties2(device, &queueFamilyCount, queueFamilyProperties.data());
 
   int i = 0;
   for (const auto &qfp : queueFamilyProperties) {
-    if (qfp.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+    if (qfp.queueFamilyProperties.queueFlags & VK_QUEUE_GRAPHICS_BIT)
       indices.graphicsFamily = i;
-    if (qfp.queueFlags & VK_QUEUE_COMPUTE_BIT)
+    if (qfp.queueFamilyProperties.queueFlags & VK_QUEUE_COMPUTE_BIT)
       indices.computeFamily = i;
-    if (qfp.queueFlags & VK_QUEUE_TRANSFER_BIT)
+    if (qfp.queueFamilyProperties.queueFlags & VK_QUEUE_TRANSFER_BIT)
       indices.transferFamily = i;
 
     VkBool32 presentSupport = false;
@@ -214,6 +231,23 @@ QueueFamilyIndices Renderer::findQueueFamilies(VkPhysicalDevice device) {
   return indices;
 }
 
+void Renderer::initializeVMA()
+{
+  VmaVulkanFunctions vmaFuncInfo{};
+  VmaAllocatorCreateInfo vmaAllocInfo{
+    .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
+    .physicalDevice = mPhysicalDevice,
+    .device = mDevice,
+    .pVulkanFunctions = &vmaFuncInfo,
+    .instance = mInstance,
+    .vulkanApiVersion = VK_VERSION_1_4
+  };
+
+  vmaImportVulkanFunctionsFromVolk(&vmaAllocInfo, &vmaFuncInfo);
+
+  if(vmaCreateAllocator(&vmaAllocInfo, &mVmaAllocator) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create VMA allocator");
+}
 SwapchainSupportDetails Renderer::querySwapchainSupport(VkPhysicalDevice device) const
 {
   SwapchainSupportDetails details;
@@ -231,7 +265,6 @@ SwapchainSupportDetails Renderer::querySwapchainSupport(VkPhysicalDevice device)
     vkGetPhysicalDeviceSurfacePresentModesKHR(device, mWindowSurface, &presentModeCount, details.presentModes.data());
 
   return details;
-    bool swapchainAdequate = false;
 }
 
 VkSurfaceFormatKHR Renderer::pickSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats)
