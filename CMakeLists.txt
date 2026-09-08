@@ -18,6 +18,7 @@ add_executable(particle-sim
   src/Renderer/Renderer.cpp
   src/Application.cpp
   src/Window.cpp
+  src/Renderer/Pipeline.cpp
 )
 
 target_include_directories(particle-sim PRIVATE

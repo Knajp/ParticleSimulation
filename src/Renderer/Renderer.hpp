@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 #include <optional>
 #include <vector>
+#include <string>
 
 namespace rend
 {
@@ -67,6 +68,7 @@ namespace rend
     static VkExtent2D chooseSwapchainExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* window);
     void createSwapchain(GLFWwindow* window);
     void createSwapchainImageViews();
+    VkPipeline createGraphicsPipeline(const std::string& vertexShaderSource, const std::string& fragmentShaderSource) const;
 
     VkInstance mInstance;
     VkPhysicalDevice mPhysicalDevice;
