@@ -76,6 +76,8 @@ namespace rend
     void createSwapchainImageViews();
     void initializeVMA();
 
+    VkPipeline createGraphicsPipeline() const;
+
     VkInstance mInstance;
     VmaAllocator mVmaAllocator;
     VkPhysicalDevice mPhysicalDevice;
