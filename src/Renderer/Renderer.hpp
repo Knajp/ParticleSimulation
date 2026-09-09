@@ -77,7 +77,7 @@ namespace rend
     void createSwapchainImageViews();
     void initializeVMA();
 
-    VkPipeline createGraphicsPipeline(const std::string& vertexShaderSource, const std::string& fragmentShaderSource) const;
+    VkPipeline createGraphicsPipeline(VkShaderModule jointShaderModule) const;
 
     VkInstance mInstance;
     VmaAllocator mVmaAllocator;

@@ -25,8 +25,9 @@ namespace rend
       .pNext = nullptr, 
       .flags = 0,
       .stage = VK_SHADER_STAGE_VERTEX_BIT,
+      .module = jointShaderModule, 
       .pName = "vert",
-      .module = jointShaderModule 
+      .pSpecializationInfo = nullptr
     };
 
     VkPipelineShaderStageCreateInfo fragmentShaderStageCreateInfo{
@@ -34,8 +35,9 @@ namespace rend
       .pNext = nullptr,
       .flags = 0,
       .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+      .module = jointShaderModule, 
       .pName = "frag",
-      .module = jointShaderModule 
+      .pSpecializationInfo = nullptr
     };
    
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertexShaderStageCreateInfo, fragmentShaderStageCreateInfo};
@@ -44,17 +46,31 @@ namespace rend
       .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
-      .primitiveRestartEnable = VK_FALSE,
-      .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+      .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+      .primitiveRestartEnable = VK_FALSE
     };
     
     VkPipelineVertexInputStateCreateInfo vertexInput{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
+      .vertexBindingDescriptionCount = 0,
+      .pVertexBindingDescriptions = nullptr,
       .vertexAttributeDescriptionCount = 0,
-      .vertexBindingDescriptionCount = 0
+      .pVertexAttributeDescriptions = nullptr
     };
+
+    VkPipelineRasterizationStateCreateInfo rasterizer{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .cullMode = VK_CULL_MODE_BACK_BIT,
+      .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+      .depthBiasEnable = VK_FALSE,
+      .depthClampEnable = VK_FALSE,
+      .rasterizerDiscardEnable = VK_FALSE,
+      .polygonMode = VK_POLYGON_MODE_FILL, .lineWidth = 1.0f 
+    }; // NOLINT
 
     VkGraphicsPipelineCreateInfo pipelineCreateInfo{
       .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -63,7 +79,14 @@ namespace rend
       .stageCount = 2,
       .pStages = shaderStages,
       .pInputAssemblyState = &inputAssembly,
-      .pVertexInputState = &vertexInput
+      .pVertexInputState = &vertexInput,
+      .pRasterizationState = &rasterizer
     };
+
+    VkPipeline graphicsPipeline;
+    if(vkCreateGraphicsPipelines(mDevice, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &graphicsPipeline) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create graphics pipeline!");
+
+    return graphicsPipeline;
   }
 }
