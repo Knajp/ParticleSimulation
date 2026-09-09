@@ -10,6 +10,7 @@
 #include <optional>
 #include <vector>
 #include <limits>
+#include <string>
 
 namespace rend
 {
@@ -76,7 +77,7 @@ namespace rend
     void createSwapchainImageViews();
     void initializeVMA();
 
-    VkPipeline createGraphicsPipeline() const;
+    VkPipeline createGraphicsPipeline(const std::string& vertexShaderSource, const std::string& fragmentShaderSource) const;
 
     VkInstance mInstance;
     VmaAllocator mVmaAllocator;
