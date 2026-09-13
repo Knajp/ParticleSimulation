@@ -354,14 +354,98 @@ void Renderer::createSwapchain(GLFWwindow* window)
   vkGetSwapchainImagesKHR(mDevice, mSwapchain, &imageCount, nullptr);
   mSwapchainImages.resize(imageCount);
   vkGetSwapchainImagesKHR(mDevice, mSwapchain, &imageCount, mSwapchainImages.data());
+
+  VkImageCreateInfo depthCreateInfo{
+    .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+    .imageType = VK_IMAGE_TYPE_2D,
+    .arrayLayers = 1,
+    .format = depthFormat,
+    .mipLevels = 1,
+    .extent = {.width = mSwapchainExtent.width, .height = mSwapchainExtent.height},
+    .samples = VK_SAMPLE_COUNT_1_BIT,
+    .tiling = VK_IMAGE_TILING_OPTIMAL,
+    .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED 
+  };
+
+  VmaAllocationCreateInfo imageAllocInfo{
+    .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+    .usage = VMA_MEMORY_USAGE_AUTO 
+  };
+
+  if(vmaCreateImage(mVmaAllocator, &depthCreateInfo, &imageAllocInfo, &mDepthImage, &mDepthImageAllocation, nullptr) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create depth image!");
+
+  VkImageViewCreateInfo imageViewCreateInfo {
+    .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+    .image = mDepthImage,
+    .viewType = VK_IMAGE_VIEW_TYPE_2D,
+    .format = depthFormat,
+    .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1}
+  };
+
+  if(vkCreateImageView(mDevice, &imageViewCreateInfo, nullptr, &mDepthImageView) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create depth image view.");
 }
 
+void Renderer::createComputeSetLayout()
+{
+  VkDescriptorSetLayoutBinding binding{ 
+    .binding = 0,
+    .descriptorCount = 1,
+    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    .pImmutableSamplers = nullptr,
+    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT 
+  };
+
+  VkDescriptorSetLayoutCreateInfo createInfo{
+    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+    .bindingCount = 1,
+    .pBindings = &binding,
+  };
+
+  if(vkCreateDescriptorSetLayout(mDevice, &createInfo, nullptr, &mComputeSetLayout) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create compute set layout");
+}
+
+void Renderer::createDescriptorPool()
+{
+  VkDescriptorPoolSize poolSize{
+    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    .descriptorCount = 1 
+  };
+
+  VkDescriptorPoolCreateInfo createInfo{
+    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+    .poolSizeCount = 1,
+    .pPoolSizes = &poolSize,
+    .maxSets = 1,
+    
+  };
+
+  if(vkCreateDescriptorPool(mDevice, &createInfo, nullptr, &mComputeDescriptorPool) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create compute descriptor pool!");
+
+}
+
+void Renderer::createComputeDescriptorSet()
+{
+  VkDescriptorSetAllocateInfo allocInfo{
+    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+    .descriptorSetCount = 1,
+    .descriptorPool = mComputeDescriptorPool,
+    .pSetLayouts = &mComputeSetLayout,
+  };
+
+  if(vkAllocateDescriptorSets(mDevice, &allocInfo, &mComputeDescriptorSet) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create compute descriptor set!");
+}
 void Renderer::createSwapchainImageViews()
 {
   mSwapchainImageViews.resize(mSwapchainImages.size());
 
   for(int i = 0; i < mSwapchainImageViews.size(); i++)
-  {
+  {  
     VkImageViewCreateInfo createInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
       .pNext = nullptr,
