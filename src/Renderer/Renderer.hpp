@@ -50,10 +50,15 @@ namespace rend
       pickPhysicalDevice();
       createLogicalDevice();
       createSwapchain(window);      
+      createComputeSetLayout();
+      createDescriptorPool();
+      createComputeDescriptorSet();
     }
-    
+   
     void Terminate()
     {
+      vkDestroyDescriptorPool(mDevice, mComputeDescriptorPool, nullptr);
+      vkDestroyDescriptorSetLayout(mDevice, mComputeSetLayout, nullptr);
       for(auto imageView : mSwapchainImageViews) // NOLINT
         vkDestroyImageView(mDevice, imageView, nullptr);
       vkDestroySwapchainKHR(mDevice, mSwapchain, nullptr);
@@ -78,6 +83,12 @@ namespace rend
     void initializeVMA();
 
     VkPipeline createGraphicsPipeline(VkShaderModule jointShaderModule) const;
+    VkPipeline createComputePipeline(VkShaderModule computeShaderModule, const std::vector<VkPushConstantRange>& pcRanges, const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts) const;
+
+    void createDescriptorPool();
+    
+    void createComputeSetLayout();
+    void createComputeDescriptorSet();
 
     VkInstance mInstance;
     VmaAllocator mVmaAllocator;
@@ -97,6 +108,15 @@ namespace rend
     VkSwapchainKHR mSwapchain;
     std::vector<VkImage> mSwapchainImages;
     std::vector<VkImageView> mSwapchainImageViews;
+    constexpr static VkFormat depthFormat{VK_FORMAT_D32_SFLOAT};
+
+    VkImage mDepthImage;
+    VkImageView mDepthImageView;
+    VmaAllocation mDepthImageAllocation;
+
+    VkDescriptorSetLayout mComputeSetLayout;
+    VkDescriptorPool mComputeDescriptorPool;
+    VkDescriptorSet mComputeDescriptorSet;
   };
 }
 
