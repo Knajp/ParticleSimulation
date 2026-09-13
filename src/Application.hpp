@@ -3,6 +3,7 @@
   
 #include "Window.hpp"
 #include "Renderer/Renderer.hpp"
+#include "Logger.hpp" 
 
 namespace app
 {
@@ -29,6 +30,7 @@ namespace app
   private:
     Window mWindow;
     ::rend::Renderer& mRenderer = rend::Renderer::getInstance();
+    log::Logger mLogger{"Application Logger"};    
   };
 }
 
