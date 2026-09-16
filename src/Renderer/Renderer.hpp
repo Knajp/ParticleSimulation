@@ -50,9 +50,6 @@ namespace rend
       pickPhysicalDevice();
       createLogicalDevice();
       createSwapchain(window);      
-      createComputeSetLayout();
-      createDescriptorPool();
-      createComputeDescriptorSet();
     }
    
     void Terminate()
@@ -85,11 +82,6 @@ namespace rend
     VkPipeline createGraphicsPipeline(VkShaderModule jointShaderModule) const;
     VkPipeline createComputePipeline(VkShaderModule computeShaderModule, const std::vector<VkPushConstantRange>& pcRanges, const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts) const;
 
-    void createDescriptorPool();
-    
-    void createComputeSetLayout();
-    void createComputeDescriptorSet();
-
     VkInstance mInstance;
     VmaAllocator mVmaAllocator;
     VkPhysicalDevice mPhysicalDevice;
@@ -117,6 +109,7 @@ namespace rend
     VkDescriptorSetLayout mComputeSetLayout;
     VkDescriptorPool mComputeDescriptorPool;
     VkDescriptorSet mComputeDescriptorSet;
+
   };
 }
 

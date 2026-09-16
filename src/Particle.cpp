@@ -63,4 +63,52 @@ namespace part
 
     return computePipeline;
   }
+  void ParticleManager::createParticleSetLayout()
+  {
+    VkDescriptorSetLayoutBinding binding{ 
+      .binding = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pImmutableSamplers = nullptr,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT 
+    };
+
+    VkDescriptorSetLayoutCreateInfo createInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = 1,
+      .pBindings = &binding,
+    };
+
+    if(vkCreateDescriptorSetLayout(mDevice, &createInfo, nullptr, &mSetLayout) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create compute set layout");
+  }
+  void ParticleManager::createDescriptorPool()
+  {
+    VkDescriptorPoolSize poolSize{
+      .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .descriptorCount = 1 
+    };
+
+    VkDescriptorPoolCreateInfo createInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+      .poolSizeCount = 1,
+      .pPoolSizes = &poolSize,
+      .maxSets = 1,
+    };
+
+    if(vkCreateDescriptorPool(mDevice, &createInfo, nullptr, &mDescriptorPool) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create compute descriptor pool!");
+  }
+  void ParticleManager::createDescriptorSet()
+  {
+    VkDescriptorSetAllocateInfo allocInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .descriptorSetCount = 1,
+      .descriptorPool = mDescriptorPool,
+      .pSetLayouts = &mSetLayout,
+    };
+
+    if(vkAllocateDescriptorSets(mDevice, &allocInfo, &mDescriptorSet) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create compute descriptor set!");
+  }
 } 

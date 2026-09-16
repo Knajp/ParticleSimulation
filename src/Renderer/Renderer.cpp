@@ -388,58 +388,11 @@ void Renderer::createSwapchain(GLFWwindow* window)
     throw std::runtime_error("Failed to create depth image view.");
 }
 
-void Renderer::createComputeSetLayout()
-{
-  VkDescriptorSetLayoutBinding binding{ 
-    .binding = 0,
-    .descriptorCount = 1,
-    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-    .pImmutableSamplers = nullptr,
-    .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT 
-  };
 
-  VkDescriptorSetLayoutCreateInfo createInfo{
-    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-    .bindingCount = 1,
-    .pBindings = &binding,
-  };
 
-  if(vkCreateDescriptorSetLayout(mDevice, &createInfo, nullptr, &mComputeSetLayout) != VK_SUCCESS)
-    throw std::runtime_error("Failed to create compute set layout");
-}
 
-void Renderer::createDescriptorPool()
-{
-  VkDescriptorPoolSize poolSize{
-    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-    .descriptorCount = 1 
-  };
 
-  VkDescriptorPoolCreateInfo createInfo{
-    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-    .poolSizeCount = 1,
-    .pPoolSizes = &poolSize,
-    .maxSets = 1,
-    
-  };
 
-  if(vkCreateDescriptorPool(mDevice, &createInfo, nullptr, &mComputeDescriptorPool) != VK_SUCCESS)
-    throw std::runtime_error("Failed to create compute descriptor pool!");
-
-}
-
-void Renderer::createComputeDescriptorSet()
-{
-  VkDescriptorSetAllocateInfo allocInfo{
-    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-    .descriptorSetCount = 1,
-    .descriptorPool = mComputeDescriptorPool,
-    .pSetLayouts = &mComputeSetLayout,
-  };
-
-  if(vkAllocateDescriptorSets(mDevice, &allocInfo, &mComputeDescriptorSet) != VK_SUCCESS)
-    throw std::runtime_error("Failed to create compute descriptor set!");
-}
 void Renderer::createSwapchainImageViews()
 {
   mSwapchainImageViews.resize(mSwapchainImages.size());

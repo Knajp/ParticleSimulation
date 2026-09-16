@@ -27,6 +27,9 @@ target_include_directories(particle-sim PRIVATE
 target_link_libraries(particle-sim PRIVATE
   Vulkan::Vulkan
   glfw
+  glslang::glslang
+  glslang::SPIRV
+  SPIRV-tools-opt
 )
 
 target_compile_definitions(particle-sim PRIVATE
