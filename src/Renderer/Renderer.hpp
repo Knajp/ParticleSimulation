@@ -1,10 +1,8 @@
 #ifndef RENDERER_HPP
 #define RENDERER_HPP
 
-#define GLFW_INCLUDE_VULKAN
-#define VK_NO_PROTOTYPES
-#include <GLFW/glfw3.h>
 #include <volk/volk.h>
+#include <GLFW/glfw3.h>
 #include <vma/vk_mem_alloc.h>
 
 #include <optional>
@@ -63,6 +61,16 @@ namespace rend
       vkDestroySurfaceKHR(mInstance, mWindowSurface, nullptr);
       vkDestroyDevice(mDevice, nullptr);
       vkDestroyInstance(mInstance, nullptr);
+    }
+
+    VkDevice getDevice() const
+    {
+      return mDevice;
+    }
+
+    VmaAllocator getAllocator() const
+    {
+      return mVmaAllocator;
     }
   private:
     void createVulkanInstance();

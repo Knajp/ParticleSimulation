@@ -1,9 +1,26 @@
 #include "Particle.hpp"
+#include "Renderer/Shader.hpp"
 
 #include <stdexcept>
 
 namespace part
 {
+  void ParticleManager::createComputeShaderModule()
+  {
+    std::string shaderGLSL = shader::ShaderTool::readFile("src/shader/partile.comp");
+    std::vector<uint32_t> shaderSource = shader::ShaderTool::optimizeSPIRV(shader::ShaderTool::GLSLtoSPIRV(shaderGLSL, EShLanguage::EShLangCompute));
+
+    VkShaderModuleCreateInfo createInfo {
+      .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+      .codeSize = static_cast<uint32_t>(shaderSource.size()),
+      .pCode = shaderSource.data(),
+    };
+
+    if(vkCreateShaderModule(mDevice, &createInfo, nullptr, &mComputeShaderModule) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create compute shader module!");
+
+  }
+
   void ParticleManager::createParticleBuffer()
   {
     VkBufferCreateInfo createInfo{
@@ -43,9 +60,9 @@ namespace part
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
-      .pName = "main",
       .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-      .module = computeShaderModule 
+      .module = computeShaderModule,
+      .pName = "main"
     };
   
   
@@ -53,8 +70,8 @@ namespace part
       .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
-      .layout = layout,
       .stage = shaderStage,
+      .layout = layout
     };
 
     VkPipeline computePipeline;
@@ -67,10 +84,10 @@ namespace part
   {
     VkDescriptorSetLayoutBinding binding{ 
       .binding = 0,
-      .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-      .pImmutableSamplers = nullptr,
-      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT 
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, 
+      .pImmutableSamplers = nullptr
     };
 
     VkDescriptorSetLayoutCreateInfo createInfo{
@@ -91,9 +108,9 @@ namespace part
 
     VkDescriptorPoolCreateInfo createInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-      .poolSizeCount = 1,
-      .pPoolSizes = &poolSize,
       .maxSets = 1,
+      .poolSizeCount = 1,
+      .pPoolSizes = &poolSize
     };
 
     if(vkCreateDescriptorPool(mDevice, &createInfo, nullptr, &mDescriptorPool) != VK_SUCCESS)
@@ -103,8 +120,8 @@ namespace part
   {
     VkDescriptorSetAllocateInfo allocInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-      .descriptorSetCount = 1,
       .descriptorPool = mDescriptorPool,
+      .descriptorSetCount = 1,
       .pSetLayouts = &mSetLayout,
     };
 

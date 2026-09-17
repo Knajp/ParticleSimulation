@@ -3,7 +3,7 @@
   
 #include "Window.hpp"
 #include "Renderer/Renderer.hpp"
-#include "Logger.hpp" 
+#include "Particle.hpp"
 
 namespace app
 {
@@ -30,7 +30,7 @@ namespace app
   private:
     Window mWindow;
     ::rend::Renderer& mRenderer = rend::Renderer::getInstance();
-    log::Logger mLogger{"Application Logger"};    
+    part::ParticleManager& mParticleManager = part::ParticleManager::getInstance();
   };
 }
 

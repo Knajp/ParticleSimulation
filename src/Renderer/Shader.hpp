@@ -10,12 +10,24 @@
 #include <iostream>
 #include <spirv-tools/libspirv.h>
 #include <spirv-tools/optimizer.hpp>
+#include <fstream>
+#include <sstream>
 
 namespace shader
 {
   class ShaderTool
   {
   public:
+    static std::string readFile(const std::string& path)
+    {
+      std::ifstream file(path);
+      if(!file)
+        std::cerr << "Failed to open file for read: " << path << "\n";
+
+      std::stringstream buffer;
+      buffer << file.rdbuf();
+      return buffer.str();
+    }
     static std::vector<uint32_t> GLSLtoSPIRV(const std::string& glslSource, EShLanguage stage)
     {
       glslang::InitializeProcess();

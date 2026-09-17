@@ -2,6 +2,7 @@
 #define PARTICLE_H
 
 #include <glm/glm.hpp>
+#include <volk/volk.h>
 #include <vulkan/vulkan.h>
 #include <vma/vk_mem_alloc.h>
 #include <vector>
@@ -31,7 +32,8 @@ namespace part
       createParticleSetLayout();
       createDescriptorPool();
       createDescriptorSet();
-      
+      createComputeShaderModule();
+      mComputePipeline = createComputePipeline(mComputeShaderModule, {}, {mSetLayout});
     }
   private:
     void createParticleBuffer();
@@ -52,7 +54,8 @@ namespace part
     VkDescriptorSetLayout mSetLayout;
     VkDescriptorPool mDescriptorPool;
     VkDescriptorSet mDescriptorSet;
-    VkShaderModule computeShaderModule;
+    VkShaderModule mComputeShaderModule;
+    VkPipeline mComputePipeline;
   };
 }
 #endif 

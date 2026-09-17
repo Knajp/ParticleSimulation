@@ -72,26 +72,27 @@ namespace rend
       .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
+      .depthClampEnable = VK_FALSE,
+      .rasterizerDiscardEnable = VK_FALSE,
+      .polygonMode = VK_POLYGON_MODE_FILL, 
       .cullMode = VK_CULL_MODE_BACK_BIT,
       .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
       .depthBiasEnable = VK_FALSE,
-      .depthClampEnable = VK_FALSE,
-      .rasterizerDiscardEnable = VK_FALSE,
-      .polygonMode = VK_POLYGON_MODE_FILL, .lineWidth = 1.0f 
-    }; // NOLINT
+      .lineWidth = 1.0f 
+    };
   
     VkPipelineColorBlendAttachmentState colorAtt{
-      .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-      .blendEnable = VK_FALSE
+      .blendEnable = VK_FALSE,
+      .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
     };
 
     VkPipelineColorBlendStateCreateInfo colorBlend{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
+      .logicOpEnable = VK_FALSE, 
       .attachmentCount = 1,
-      .pAttachments = &colorAtt,
-      .logicOpEnable = VK_FALSE 
+      .pAttachments = &colorAtt
     };
 
     VkPipelineMultisampleStateCreateInfo multisampler{
@@ -123,13 +124,13 @@ namespace rend
       .flags = 0,
       .stageCount = 2,
       .pStages = shaderStages,
-      .pInputAssemblyState = &inputAssembly,
       .pVertexInputState = &vertexInput,
+      .pInputAssemblyState = &inputAssembly,
+      .pViewportState = &viewportState, 
       .pRasterizationState = &rasterizer,
-      .pColorBlendState = &colorBlend,
       .pMultisampleState = &multisampler,
-      .pDynamicState = &dynamicState,
-      .pViewportState = &viewportState
+      .pColorBlendState = &colorBlend,
+      .pDynamicState = &dynamicState
     };
 
     VkPipeline graphicsPipeline;

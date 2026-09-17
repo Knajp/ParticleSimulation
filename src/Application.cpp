@@ -16,7 +16,7 @@ namespace app
       throw std::runtime_error("Failed to init GLFW!");
     mWindow.init();
     mRenderer.Init(mWindow.getHandle());
-    mLogger = log::Logger("Application Logger");
+    mParticleManager.init(mRenderer.getDevice(), mRenderer.getAllocator());  
   }
   
   void Application::run()
