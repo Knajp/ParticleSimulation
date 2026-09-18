@@ -35,7 +35,9 @@ target_link_libraries(particle-sim PRIVATE
   glslang::SPIRV
   /home/lenovo/VulkanSDK/1.4.357.0/x86_64/lib/libvolk.a
 )
-
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(particle-sim PRIVATE DEBUG)
+endif()
 target_compile_definitions(particle-sim PRIVATE
   GLFW_INCLUDE_VULKAN
   VK_NO_PROTOTYPES

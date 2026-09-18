@@ -44,9 +44,11 @@ namespace rend
     void Init(GLFWwindow* window)
     {
       createVulkanInstance();
+      createDebugMessenger();
       createWindowSurface(window);
       pickPhysicalDevice();
       createLogicalDevice();
+      initializeVMA();
       createSwapchain(window);      
     }
    
@@ -60,6 +62,7 @@ namespace rend
       vmaDestroyAllocator(mVmaAllocator);
       vkDestroySurfaceKHR(mInstance, mWindowSurface, nullptr);
       vkDestroyDevice(mDevice, nullptr);
+      vkDestroyDebugUtilsMessengerEXT(mInstance, mDebugMessenger, nullptr);
       vkDestroyInstance(mInstance, nullptr);
     }
 
@@ -74,6 +77,7 @@ namespace rend
     }
   private:
     void createVulkanInstance();
+    void createDebugMessenger();
     void pickPhysicalDevice();
     void createLogicalDevice();
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
@@ -94,6 +98,7 @@ namespace rend
     VmaAllocator mVmaAllocator;
     VkPhysicalDevice mPhysicalDevice;
     VkDevice mDevice;
+    VkDebugUtilsMessengerEXT mDebugMessenger = VK_NULL_HANDLE;
   
     VkQueue mGraphicsQueue;
     VkQueue mComputeQueue;

@@ -7,12 +7,12 @@ namespace part
 {
   void ParticleManager::createComputeShaderModule()
   {
-    std::string shaderGLSL = shader::ShaderTool::readFile("src/shader/partile.comp");
+    std::string shaderGLSL = shader::ShaderTool::readFile("src/shader/particle.comp");
     std::vector<uint32_t> shaderSource = shader::ShaderTool::optimizeSPIRV(shader::ShaderTool::GLSLtoSPIRV(shaderGLSL, EShLanguage::EShLangCompute));
 
     VkShaderModuleCreateInfo createInfo {
       .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-      .codeSize = static_cast<uint32_t>(shaderSource.size()),
+      .codeSize = static_cast<uint32_t>(shaderSource.size()) * sizeof(uint32_t),
       .pCode = shaderSource.data(),
     };
 

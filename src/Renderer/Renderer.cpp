@@ -31,6 +31,34 @@ std::vector<const char *> instanceExtensions = {
 std::vector<const char *> deviceLayers = {};
 std::vector<const char *> deviceExtensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, // hey, it's me! severity!
+                                                    VkDebugUtilsMessageTypeFlagsEXT type,
+                                                    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                                    void* userData) 
+{
+  std::cerr << "[Vulkan]" << pCallbackData->pMessage << "\n";
+  return VK_FALSE;
+}
+
+void Renderer::createDebugMessenger()
+{
+  VkDebugUtilsMessengerCreateInfoEXT createInfo{
+    .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+    .messageSeverity = 
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+    .messageType = 
+      VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+      VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+    .pfnUserCallback = debugCallback
+  };
+
+  if(vkCreateDebugUtilsMessengerEXT(mInstance, &createInfo, nullptr, &mDebugMessenger) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create debug utils messenger!");
+}
 void Renderer::createVulkanInstance() {
   volkInitialize();
 
@@ -97,14 +125,20 @@ void Renderer::pickPhysicalDevice() {
     }
 
     if(!checkDeviceExtensionSupport(device))
+    {
+      std::cout << "Device does not support requested extensions!\n";
       continue;
+    }
  
     bool swapchainAdequate = false;
     SwapchainSupportDetails swapchainDetails = querySwapchainSupport(device);
     swapchainAdequate = !swapchainDetails.presentModes.empty() && !swapchainDetails.surfaceFormats.empty();
     
     if(!swapchainAdequate)
+    {
+      std::cerr << "No surface present modes or no surface formats were found.\n";
       continue;
+    }
 
     const int discreteBoost = 1000;
 
@@ -131,7 +165,7 @@ bool Renderer::checkDeviceExtensionSupport(VkPhysicalDevice device)
   std::vector<VkExtensionProperties> extensions(extensionCount);
   vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, extensions.data());
 
-  std::set<const char*> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+  std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
 
   for(const auto& extension : extensions)
     requiredExtensions.erase(extension.extensionName);
@@ -208,6 +242,9 @@ QueueFamilyIndices Renderer::findQueueFamilies(VkPhysicalDevice device) {
   vkGetPhysicalDeviceQueueFamilyProperties2(device, &queueFamilyCount, nullptr);
 
   std::vector<VkQueueFamilyProperties2> queueFamilyProperties(queueFamilyCount);
+  for(auto& queueFamily : queueFamilyProperties)
+    queueFamily.sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2;
+
   vkGetPhysicalDeviceQueueFamilyProperties2(device, &queueFamilyCount, queueFamilyProperties.data());
 
   int i = 0;
@@ -235,12 +272,11 @@ void Renderer::initializeVMA()
 {
   VmaVulkanFunctions vmaFuncInfo{};
   VmaAllocatorCreateInfo vmaAllocInfo{
-    .flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
     .physicalDevice = mPhysicalDevice,
     .device = mDevice,
     .pVulkanFunctions = &vmaFuncInfo,
     .instance = mInstance,
-    .vulkanApiVersion = VK_VERSION_1_4
+    .vulkanApiVersion = VK_API_VERSION_1_4
   };
 
   vmaImportVulkanFunctionsFromVolk(&vmaAllocInfo, &vmaFuncInfo);
@@ -256,11 +292,13 @@ SwapchainSupportDetails Renderer::querySwapchainSupport(VkPhysicalDevice device)
 
   uint32_t formatCount = 0;
   vkGetPhysicalDeviceSurfaceFormatsKHR(device, mWindowSurface, &formatCount, nullptr);
+  details.surfaceFormats.resize(formatCount);
   if(formatCount)
     vkGetPhysicalDeviceSurfaceFormatsKHR(device, mWindowSurface, &formatCount, details.surfaceFormats.data());
 
   uint32_t presentModeCount = 0;
   vkGetPhysicalDeviceSurfacePresentModesKHR(device, mWindowSurface, &presentModeCount, nullptr);
+  details.presentModes.resize(presentModeCount);
   if(presentModeCount)
     vkGetPhysicalDeviceSurfacePresentModesKHR(device, mWindowSurface, &presentModeCount, details.presentModes.data());
 
@@ -342,6 +380,7 @@ void Renderer::createSwapchain(GLFWwindow* window)
     .imageSharingMode = imageSharingMode,
     .queueFamilyIndexCount = queueFamilyCount,
     .pQueueFamilyIndices = queueIndicesPtr,
+    .preTransform = swapchainSupport.capabilities.currentTransform,
     .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
     .presentMode = mSwapchainPresentMode,
     .clipped = VK_TRUE,
@@ -359,7 +398,7 @@ void Renderer::createSwapchain(GLFWwindow* window)
     .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
     .imageType = VK_IMAGE_TYPE_2D,
     .format = depthFormat,
-    .extent = {.width = mSwapchainExtent.width, .height = mSwapchainExtent.height},
+    .extent = {.width = mSwapchainExtent.width, .height = mSwapchainExtent.height, .depth =1},
     .mipLevels = 1,
     .arrayLayers = 1,
     .samples = VK_SAMPLE_COUNT_1_BIT,
