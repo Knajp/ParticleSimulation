@@ -10,6 +10,9 @@
 #include <limits>
 #include <string>
 
+#include "Shader.hpp"
+
+
 namespace rend
 {
   struct QueueFamilyIndices
@@ -50,8 +53,18 @@ namespace rend
       createLogicalDevice();
       initializeVMA();
       createSwapchain(window);      
+      createGraphicsShaderModules();
+      createDescriptorPool();
+      createDescriptorSetLayout();
+      createDescriptorSets();
+      mGraphicsPipeline = createGraphicsPipeline(mVertexShaderModule, mFragmentShaderModule, mGraphicsPipelineLayout);
     }
    
+    void Step()
+    {
+      
+    }
+
     void Terminate()
     {
       vkDestroyDescriptorPool(mDevice, mComputeDescriptorPool, nullptr);
@@ -75,12 +88,33 @@ namespace rend
     {
       return mVmaAllocator;
     }
+
+    VkQueue getComputeQueue() const
+    {
+      return mComputeQueue;
+    }
+    
+    uint32_t getComputeFamilyIndex() const
+    {
+      QueueFamilyIndices indices = findQueueFamilies(mPhysicalDevice);
+      return indices.computeFamily.value();
+    }
+    
+    void drawStorageBuffer(VkBuffer buffer, uint32_t vertexCount) const;
+
+    void beginRecording();
+    void endAndSubmit();
   private:
+
+    static constexpr int MAX_FRAMES_IN_FLIGHT = 3;
+    int mCurrentFrameInFlight = 0;
+    uint32_t mCurrentImageIndex = 0;
+
     void createVulkanInstance();
     void createDebugMessenger();
     void pickPhysicalDevice();
     void createLogicalDevice();
-    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) const;
     void createWindowSurface(GLFWwindow* window);
     static bool checkDeviceExtensionSupport(VkPhysicalDevice device); 
     SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device) const;
@@ -90,9 +124,15 @@ namespace rend
     void createSwapchain(GLFWwindow* window);
     void createSwapchainImageViews();
     void initializeVMA();
+    void createCommandBuffers();
+    void createGraphicsShaderModules();
 
-    VkPipeline createGraphicsPipeline(VkShaderModule jointShaderModule) const;
-    VkPipeline createComputePipeline(VkShaderModule computeShaderModule, const std::vector<VkPushConstantRange>& pcRanges, const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts) const;
+    void createSynchronizationResources();
+    VkPipeline createGraphicsPipeline(VkShaderModule vertexShaderModule, VkShaderModule fragmentShaderModule, VkPipelineLayout& pipelineLayout) const;
+
+    void createDescriptorPool();
+    void createDescriptorSetLayout();
+    void createDescriptorSets();
 
     VkInstance mInstance;
     VmaAllocator mVmaAllocator;
@@ -104,6 +144,11 @@ namespace rend
     VkQueue mComputeQueue;
     VkQueue mTransferQueue;
     VkQueue mPresentQueue;
+
+    VkShaderModule mVertexShaderModule;
+    VkShaderModule mFragmentShaderModule;
+    VkPipeline mGraphicsPipeline;
+    VkPipelineLayout mGraphicsPipelineLayout;
 
     VkSurfaceKHR mWindowSurface;
 
@@ -123,6 +168,19 @@ namespace rend
     VkDescriptorPool mComputeDescriptorPool;
     VkDescriptorSet mComputeDescriptorSet;
 
+    VkCommandPool mCommandPool;
+    std::vector<VkCommandBuffer> mCommandBuffers;
+
+    VkCommandPool mTransferPool;
+    VkCommandBuffer mTransferBuffer;
+
+    VkDescriptorPool mDescriptorPool;
+    VkDescriptorSetLayout mDescriptorSetLayout;
+    VkDescriptorSet mDescriptorSet;
+
+    std::vector<VkSemaphore> mImageAvailableSemaphores;
+    std::vector<VkSemaphore> mRenderFinishedSemaphores;
+    std::vector<VkFence> mInFlightFences;
   };
 }
 

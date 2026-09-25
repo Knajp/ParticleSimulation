@@ -235,7 +235,228 @@ void Renderer::createLogicalDevice() {
                    &mTransferQueue);
 }
 
-QueueFamilyIndices Renderer::findQueueFamilies(VkPhysicalDevice device) {
+void Renderer::createCommandBuffers()
+{
+  QueueFamilyIndices familyIndices = findQueueFamilies(mPhysicalDevice);
+
+  VkCommandPoolCreateInfo poolInfo{
+    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = 0,
+    .queueFamilyIndex = familyIndices.graphicsFamily.value()
+  };
+
+  if(vkCreateCommandPool(mDevice, &poolInfo, nullptr, &mCommandPool) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create command pool.");
+
+  VkCommandPoolCreateInfo transferPoolCreateInfo {
+    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = 0,
+    .queueFamilyIndex = familyIndices.transferFamily.value()
+  };
+
+  if(vkCreateCommandPool(mDevice, &transferPoolCreateInfo, nullptr, &mTransferPool) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create command pool.");
+ 
+  VkCommandBufferAllocateInfo allocInfo{
+    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+    .commandPool = mCommandPool,
+    .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+    .commandBufferCount = MAX_FRAMES_IN_FLIGHT
+  };
+
+  mCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+  if(vkAllocateCommandBuffers(mDevice, &allocInfo, mCommandBuffers.data()) != VK_SUCCESS)
+    throw std::runtime_error("Failed to allocate command buffers!");
+
+  VkCommandBufferAllocateInfo transferAllocInfo{
+    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+    .commandPool = mTransferPool,
+    .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+    .commandBufferCount = 1
+  };
+
+  if(vkAllocateCommandBuffers(mDevice, &transferAllocInfo, &mTransferBuffer) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create transfer buffer!");
+}
+
+void Renderer::drawStorageBuffer(VkBuffer buffer, uint32_t vertexCount) const
+{
+  VkBufferMemoryBarrier2 barrier {
+    .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+    .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, 
+    .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT, 
+    .dstAccessMask = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
+    .buffer = buffer,
+    .offset = 0,
+    .size = VK_WHOLE_SIZE 
+  };
+
+  VkDependencyInfo dependency{
+    .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+    .bufferMemoryBarrierCount = 1,
+    .pBufferMemoryBarriers = &barrier 
+  };
+
+  vkCmdPipelineBarrier2(mCommandBuffers[mCurrentFrameInFlight], &dependency);
+
+  vkCmdBindPipeline(mCommandBuffers[mCurrentFrameInFlight], VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicsPipeline);
+
+  VkBindDescriptorSetsInfo bindInfo{
+    .sType = VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO,
+    .pNext = nullptr,
+    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+    .layout = mGraphicsPipelineLayout,
+    .firstSet = 0,
+    .descriptorSetCount = 1,
+    .pDescriptorSets = &mDescriptorSet,
+    .dynamicOffsetCount = 0,
+    .pDynamicOffsets = nullptr
+  };
+
+  vkCmdBindDescriptorSets2(mCommandBuffers[mCurrentFrameInFlight], &bindInfo);
+
+  vkCmdDraw(mCommandBuffers[mCurrentFrameInFlight], vertexCount, 1, 0, 0);
+}
+
+void Renderer::beginRecording()
+{
+  vkWaitForFences(mDevice, 1, &mInFlightFences[mCurrentFrameInFlight], VK_TRUE, UINT64_MAX);
+
+  VkAcquireNextImageInfoKHR acquireInfo {
+    .sType = VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR,
+    .pNext = nullptr,
+    .swapchain = mSwapchain,
+    .timeout = UINT64_MAX,  
+    .semaphore = mImageAvailableSemaphores[mCurrentFrameInFlight],
+    .fence = VK_NULL_HANDLE
+  };
+
+  VkResult result = vkAcquireNextImage2KHR(mDevice, &acquireInfo, &mCurrentImageIndex);
+  if(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR && result != VK_ERROR_OUT_OF_DATE_KHR)
+    throw std::runtime_error("Failed to acquire image!");
+
+  vkResetFences(mDevice, 1, &mInFlightFences[mCurrentFrameInFlight]);
+
+  vkResetCommandBuffer(mCommandBuffers[mCurrentFrameInFlight], 0);
+
+  VkCommandBufferBeginInfo beginInfo{
+    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+    .pNext = nullptr,
+    .flags = 0,
+    .pInheritanceInfo = nullptr 
+  };
+
+  vkBeginCommandBuffer(mCommandBuffers[mCurrentFrameInFlight], &beginInfo);
+}
+
+void Renderer::endAndSubmit()
+{
+  if(vkEndCommandBuffer(mCommandBuffers[mCurrentFrameInFlight]) != VK_SUCCESS)
+    throw std::runtime_error("Failed to end command buffer!");
+
+  VkCommandBufferSubmitInfo cbInfo {
+    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+    .commandBuffer = mCommandBuffers[mCurrentFrameInFlight],
+  };
+
+  VkSemaphoreSubmitInfo waitInfo {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+    .semaphore = mImageAvailableSemaphores[mCurrentFrameInFlight],
+    .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
+  };
+
+  VkSemaphoreSubmitInfo signalInfo {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+    .semaphore = mRenderFinishedSemaphores[mCurrentFrameInFlight],
+    .stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT
+  };
+
+  VkSubmitInfo2 submitInfo{
+    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+    .pNext = nullptr,
+    .flags = 0,
+    .waitSemaphoreInfoCount = 1,
+    .pWaitSemaphoreInfos = &waitInfo,
+    .commandBufferInfoCount = 1,
+    .pCommandBufferInfos = &cbInfo,
+    .signalSemaphoreInfoCount = 1,
+    .pSignalSemaphoreInfos = &signalInfo 
+  };
+
+  if(vkQueueSubmit2(mGraphicsQueue, 1, &submitInfo, mInFlightFences[mCurrentFrameInFlight]) != VK_SUCCESS)
+    throw std::runtime_error("Failed to submit command buffer to graphics queue!");
+
+  VkPresentInfoKHR presentInfo{
+    .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+    .pNext = nullptr,
+    .waitSemaphoreCount = 1,
+    .pWaitSemaphores = &mRenderFinishedSemaphores[mCurrentFrameInFlight],
+    .pSwapchains = &mSwapchain,
+    .pImageIndices = &mCurrentImageIndex,
+  };
+
+  vkQueuePresentKHR(mPresentQueue, &presentInfo);
+
+  mCurrentFrameInFlight = (mCurrentFrameInFlight + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+void Renderer::createSynchronizationResources()
+{
+  mImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+  mRenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+  mInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+  VkSemaphoreCreateInfo semaphoreInfo{
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO 
+  };
+  VkFenceCreateInfo fenceInfo{
+    .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+    .flags = VK_FENCE_CREATE_SIGNALED_BIT 
+  };
+ 
+  for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+  {
+    if(vkCreateSemaphore(mDevice, &semaphoreInfo, nullptr, &mImageAvailableSemaphores[i]) != VK_SUCCESS ||
+       vkCreateSemaphore(mDevice, &semaphoreInfo, nullptr, &mRenderFinishedSemaphores[i]) != VK_SUCCESS ||
+       vkCreateFence(mDevice, &fenceInfo, nullptr, &mInFlightFences[i]) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create sync resources!");
+  }
+}
+void Renderer::createGraphicsShaderModules()
+{
+  std::string vsource = shader::ShaderTool::readFile("src/shader/shader.vert");
+  std::vector<uint32_t> vspirv= shader::ShaderTool::GLSLtoSPIRV(vsource, EShLangVertex);
+  vspirv = shader::ShaderTool::optimizeSPIRV(vspirv);
+
+  VkShaderModuleCreateInfo vCreateInfo{
+    .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = 0,
+    .codeSize = vspirv.size() * sizeof(uint32_t),
+    .pCode = vspirv.data() 
+  };
+
+  if(vkCreateShaderModule(mDevice, &vCreateInfo, nullptr, &mVertexShaderModule) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create vertex shader module!");
+
+  std::string fsource = shader::ShaderTool::readFile("src/shader/shader.frag");
+  std::vector<uint32_t> fspirv = shader::ShaderTool::GLSLtoSPIRV(fsource, EShLangFragment);
+  fspirv = shader::ShaderTool::optimizeSPIRV(fspirv);
+
+  VkShaderModuleCreateInfo fCreateInfo {
+    .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = 0,
+    .codeSize = fspirv.size() * sizeof(uint32_t),
+    .pCode = fspirv.data()
+  };
+
+  if(vkCreateShaderModule(mDevice, &fCreateInfo, nullptr, &mFragmentShaderModule) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create fragment shader module!");
+}
+QueueFamilyIndices Renderer::findQueueFamilies(VkPhysicalDevice device) const {
   QueueFamilyIndices indices;
 
   uint32_t queueFamilyCount = 0;
@@ -426,12 +647,58 @@ void Renderer::createSwapchain(GLFWwindow* window)
   if(vkCreateImageView(mDevice, &imageViewCreateInfo, nullptr, &mDepthImageView) != VK_SUCCESS)
     throw std::runtime_error("Failed to create depth image view.");
 }
+void Renderer::createDescriptorPool()
+{
+  VkDescriptorPoolSize poolSize{
+    .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    .descriptorCount = 1
+  };
 
+  VkDescriptorPoolCreateInfo createInfo{
+    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+    .pNext = (void*)0,
+    .flags = 0,
+    .maxSets = 1, 
+    .poolSizeCount = 1,
+    .pPoolSizes = &poolSize
+  };
 
+  if(vkCreateDescriptorPool(mDevice, &createInfo, nullptr, &mDescriptorPool) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create descriptor pool!");
+}
+void Renderer::createDescriptorSetLayout()
+{
+  VkDescriptorSetLayoutBinding binding {
+    .binding = 0,
+    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    .descriptorCount = 1,
+    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT, 
+    .pImmutableSamplers = nullptr,
+  };
 
+  VkDescriptorSetLayoutCreateInfo createInfo{
+    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = 0,
+    
+  };
 
+  if(vkCreateDescriptorSetLayout(mDevice, &createInfo, nullptr, &mDescriptorSetLayout) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create descriptor set layout!");
+}
+void Renderer::createDescriptorSets()
+{
+  VkDescriptorSetAllocateInfo allocInfo{
+    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+    .pNext = nullptr,
+    .descriptorPool = mDescriptorPool,
+    .descriptorSetCount = 1,
+    .pSetLayouts = &mDescriptorSetLayout
+  };
 
-
+  if(vkAllocateDescriptorSets(mDevice, &allocInfo, &mDescriptorSet) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create descriptor set!");
+}
 void Renderer::createSwapchainImageViews()
 {
   mSwapchainImageViews.resize(mSwapchainImages.size());

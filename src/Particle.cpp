@@ -5,6 +5,16 @@
 
 namespace part
 {
+  void ParticleManager::createParticlePushConstantRange()
+  {
+    VkPushConstantRange pcRange{
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, 
+      .offset = 0,
+      .size = sizeof(pushConstants)
+    };
+
+    mParticlePCRange = pcRange;
+  }
   void ParticleManager::createComputeShaderModule()
   {
     std::string shaderGLSL = shader::ShaderTool::readFile("src/shader/particle.comp");
@@ -41,7 +51,7 @@ namespace part
       throw std::runtime_error("Failed to create particle buffer!");
     
   }
-  VkPipeline ParticleManager::createComputePipeline(const VkShaderModule computeShaderModule, const std::vector<VkPushConstantRange>& pcRanges, const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts) const
+  VkPipeline ParticleManager::createComputePipeline(const VkShaderModule computeShaderModule, const std::vector<VkPushConstantRange>& pcRanges, const std::vector<VkDescriptorSetLayout>& descriptorSetLayouts, VkPipelineLayout& pipelineLayout) const
   {
     VkPipelineLayoutCreateInfo layoutCreateInfo
     {
@@ -52,8 +62,7 @@ namespace part
       .pPushConstantRanges = pcRanges.data()
     };
 
-    VkPipelineLayout layout;
-    if(vkCreatePipelineLayout(mDevice, &layoutCreateInfo, nullptr, &layout) != VK_SUCCESS)
+    if(vkCreatePipelineLayout(mDevice, &layoutCreateInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
       throw std::runtime_error("Failed to create pipeline layout!");
 
     VkPipelineShaderStageCreateInfo shaderStage{
@@ -71,7 +80,7 @@ namespace part
       .pNext = nullptr,
       .flags = 0,
       .stage = shaderStage,
-      .layout = layout
+      .layout = pipelineLayout
     };
 
     VkPipeline computePipeline;
@@ -79,6 +88,117 @@ namespace part
       throw std::runtime_error("Failed to create compute pipeline!");
 
     return computePipeline;
+  }
+  
+  void ParticleManager::writeDescriptorSet()
+  {
+    VkDescriptorBufferInfo bufferInfo{
+      .buffer = mParticleBuffer,
+      .offset = 0,
+      .range = VK_WHOLE_SIZE
+    };
+
+    VkWriteDescriptorSet write{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .pNext = nullptr,
+      .dstSet = mDescriptorSet,
+      .dstBinding = 0,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &bufferInfo,
+    };
+
+    vkUpdateDescriptorSets(mDevice, 1, &write, 0, nullptr);
+  }
+
+  void ParticleManager::createWaitFence()
+  {
+    VkFenceCreateInfo createInfo {
+      .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+
+    };
+    
+    if(vkCreateFence(mDevice, &createInfo, nullptr, &mWaitFence) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create particle fence!");
+  }
+  void ParticleManager::createCommandBuffer(uint32_t computeFamilyIndex)
+  {
+    VkCommandPoolCreateInfo poolCreateInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .queueFamilyIndex = computeFamilyIndex 
+    };
+    
+    if(vkCreateCommandPool(mDevice, &poolCreateInfo, nullptr, &mCommandPool) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create particle manager command pool");
+
+    VkCommandBufferAllocateInfo allocInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .commandPool = mCommandPool,
+      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY, 
+      .commandBufferCount = 1,
+    };
+
+    if(vkAllocateCommandBuffers(mDevice, &allocInfo, &mCommandBuffer) != VK_SUCCESS)
+      throw std::runtime_error("Failed to allocate particle manager command buffer");
+
+  }
+  void ParticleManager::invokeComputeShader(GLFWwindow* pWindow)
+  { 
+    int width, height; // NOLINT
+    glfwGetFramebufferSize(pWindow, &width, &height);
+
+    pushConstants pcValues {
+      .init = mInit,
+      .screenSize = {width, height},
+      .padding = UINT32_MAX
+    };
+
+    if(mInit == 1) mInit = 0;
+
+    VkCommandBufferBeginInfo beginInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+    };
+
+    vkBeginCommandBuffer(mCommandBuffer, &beginInfo);
+
+    vkCmdBindPipeline(mCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mComputePipeline);
+    
+    vkCmdBindDescriptorSets(mCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mComputePipelineLayout, 0, 1, &mDescriptorSet, 0, nullptr);
+    
+    VkPushConstantsInfo pcInfo{
+      .sType = VK_STRUCTURE_TYPE_PUSH_CONSTANTS_INFO,
+      .layout = mComputePipelineLayout,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+      .offset = 0,
+      .size = sizeof(pushConstants),
+      .pValues = &pcValues
+    };
+
+    vkCmdPushConstants2(mCommandBuffer, &pcInfo);
+
+    vkCmdDispatch(mCommandBuffer, (mParticleCount + 255) / 266, 0, 0); // NOLINT
+
+    vkEndCommandBuffer(mCommandBuffer);
+
+    VkCommandBufferSubmitInfo cbSubmit{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+      .commandBuffer = mCommandBuffer,
+  
+    };
+    VkSubmitInfo2 submitInfo{
+      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+      .commandBufferInfoCount = 1,
+      .pCommandBufferInfos = &cbSubmit,
+    }; 
+
+    vkQueueSubmit2(mQueue, 1, &submitInfo, mWaitFence);
+
+    vkWaitForFences(mDevice, 1, &mWaitFence, VK_TRUE, UINT64_MAX);
+    vkResetFences(mDevice, 1, &mWaitFence);
+    vkResetCommandPool(mDevice, mCommandPool, 0);
   }
   void ParticleManager::createParticleSetLayout()
   {

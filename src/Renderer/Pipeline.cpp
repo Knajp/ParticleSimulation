@@ -4,19 +4,18 @@
 
 namespace rend
 {
-  VkPipeline Renderer::createGraphicsPipeline(VkShaderModule jointShaderModule) const
+  VkPipeline Renderer::createGraphicsPipeline(VkShaderModule vertexShaderModule, VkShaderModule fragmentShaderModule, VkPipelineLayout& pipelineLayout) const
   {
     VkPipelineLayoutCreateInfo layoutCreateInfo{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
-      .setLayoutCount = 0,
-      .pSetLayouts = nullptr,
+      .setLayoutCount = 1 ,
+      .pSetLayouts = &mDescriptorSetLayout,
       .pushConstantRangeCount = 0,
       .pPushConstantRanges = nullptr
     };
 
-    VkPipelineLayout pipelineLayout;
     if(vkCreatePipelineLayout(mDevice, &layoutCreateInfo, nullptr, &pipelineLayout) != VK_SUCCESS)
       throw std::runtime_error("Failed to create graphics pipeline layout!");
    
@@ -25,16 +24,28 @@ namespace rend
       .pNext = nullptr,
       .colorAttachmentCount = 1,
       .pColorAttachmentFormats = &mSwapchainFormat.format,
-      .depthAttachmentFormat = depthFormat 
+      .depthAttachmentFormat = depthFormat,
     };
 
+    VkPipelineDepthStencilStateCreateInfo depthStencilState{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+      .depthTestEnable = VK_FALSE,
+      .depthWriteEnable = VK_FALSE,
+      .depthCompareOp = VK_COMPARE_OP_ALWAYS,
+      .depthBoundsTestEnable = VK_FALSE,
+      .stencilTestEnable = VK_FALSE,
+      .front = {},
+      .back = {},
+      .minDepthBounds = 0.0f,
+      .maxDepthBounds = 1.0f
+    };
     VkPipelineShaderStageCreateInfo vertexShaderStageCreateInfo{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .pNext = nullptr, 
       .flags = 0,
       .stage = VK_SHADER_STAGE_VERTEX_BIT,
-      .module = jointShaderModule, 
-      .pName = "vert",
+      .module = vertexShaderModule, 
+      .pName = "main",
       .pSpecializationInfo = nullptr
     };
 
@@ -43,8 +54,8 @@ namespace rend
       .pNext = nullptr,
       .flags = 0,
       .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-      .module = jointShaderModule, 
-      .pName = "frag",
+      .module = fragmentShaderModule, 
+      .pName = "main",
       .pSpecializationInfo = nullptr
     };
    
@@ -129,8 +140,10 @@ namespace rend
       .pViewportState = &viewportState, 
       .pRasterizationState = &rasterizer,
       .pMultisampleState = &multisampler,
+      .pDepthStencilState = &depthStencilState,
       .pColorBlendState = &colorBlend,
-      .pDynamicState = &dynamicState
+      .pDynamicState = &dynamicState,
+      .layout = pipelineLayout,
     };
 
     VkPipeline graphicsPipeline;

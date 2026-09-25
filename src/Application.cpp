@@ -16,7 +16,7 @@ namespace app
       throw std::runtime_error("Failed to init GLFW!");
     mWindow.init();
     mRenderer.Init(mWindow.getHandle());
-    mParticleManager.init(mRenderer.getDevice(), mRenderer.getAllocator());  
+    mParticleManager.init(mRenderer.getDevice(), mRenderer.getAllocator(), mRenderer.getComputeQueue(), mRenderer.getComputeFamilyIndex());  
   }
   
   void Application::run()
@@ -24,6 +24,14 @@ namespace app
     while(!glfwWindowShouldClose(mWindow.getHandle()))
     {
       glfwPollEvents();
+
+      mParticleManager.step(mWindow.getHandle());
+
+      mRenderer.beginRecording();
+
+      mRenderer.drawStorageBuffer(mParticleManager.getBufferHandle(), part::ParticleManager::getParticleCount());
+
+      mRenderer.endAndSubmit();
     }
   }
 
