@@ -32,7 +32,7 @@ uint hash(uint x)
 
 float randomFloat(uint x)
 {
-  return (float)hash(x) / 4294967295.0f;
+  return float(hash(x)) / 4294967295.0f;
 }
 
 void main()

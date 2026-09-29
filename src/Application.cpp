@@ -25,9 +25,11 @@ namespace app
     {
       glfwPollEvents();
 
-      mParticleManager.step(mWindow.getHandle());
+      VkCommandBuffer cb = mRenderer.beginRecording();
 
-      mRenderer.beginRecording();
+      mParticleManager.step(mWindow.getHandle(), cb);
+
+      mRenderer.beginRendering();
 
       mRenderer.drawStorageBuffer(mParticleManager.getBufferHandle(), part::ParticleManager::getParticleCount());
 

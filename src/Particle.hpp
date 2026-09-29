@@ -50,9 +50,10 @@ namespace part
       createWaitFence();
     }
     
-    void step(GLFWwindow* pWindow)
+    void step(GLFWwindow* pWindow, VkCommandBuffer cb)
     {
       invokeComputeShader(pWindow);
+      transferIntoVertex(cb);
     }
    
     VkBuffer getBufferHandle() const
@@ -75,10 +76,11 @@ namespace part
     void createParticlePushConstantRange();
     void writeDescriptorSet();
     void createWaitFence();
-
+    
     void createCommandBuffer(uint32_t computeFamilyIndex);
 
     void invokeComputeShader(GLFWwindow* pWindow);
+    void transferIntoVertex(VkCommandBuffer cb);
 
     VkBuffer mParticleBuffer;
     VmaAllocation mParticleAllocation;    

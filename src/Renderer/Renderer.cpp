@@ -242,7 +242,7 @@ void Renderer::createCommandBuffers()
   VkCommandPoolCreateInfo poolInfo{
     .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
     .pNext = nullptr,
-    .flags = 0,
+    .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
     .queueFamilyIndex = familyIndices.graphicsFamily.value()
   };
 
@@ -283,26 +283,26 @@ void Renderer::createCommandBuffers()
 
 void Renderer::drawStorageBuffer(VkBuffer buffer, uint32_t vertexCount) const
 {
-  VkBufferMemoryBarrier2 barrier {
-    .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-    .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-    .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, 
-    .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT, 
-    .dstAccessMask = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
-    .buffer = buffer,
-    .offset = 0,
-    .size = VK_WHOLE_SIZE 
-  };
-
-  VkDependencyInfo dependency{
-    .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-    .bufferMemoryBarrierCount = 1,
-    .pBufferMemoryBarriers = &barrier 
-  };
-
-  vkCmdPipelineBarrier2(mCommandBuffers[mCurrentFrameInFlight], &dependency);
 
   vkCmdBindPipeline(mCommandBuffers[mCurrentFrameInFlight], VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicsPipeline);
+
+  VkDescriptorBufferInfo bufferInfo {
+    .buffer = buffer,
+    .offset = 0,
+    .range = VK_WHOLE_SIZE 
+  };
+  VkWriteDescriptorSet write {
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+    .pNext = nullptr,
+    .dstSet = mDescriptorSet,
+    .dstBinding = 0,
+    .dstArrayElement = 0,
+    .descriptorCount = 1,
+    .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    .pBufferInfo = &bufferInfo
+  };
+
+  vkUpdateDescriptorSets(mDevice, 1, &write, 0, nullptr);
 
   VkBindDescriptorSetsInfo bindInfo{
     .sType = VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO,
@@ -321,7 +321,7 @@ void Renderer::drawStorageBuffer(VkBuffer buffer, uint32_t vertexCount) const
   vkCmdDraw(mCommandBuffers[mCurrentFrameInFlight], vertexCount, 1, 0, 0);
 }
 
-void Renderer::beginRecording()
+VkCommandBuffer Renderer::beginRecording()
 {
   vkWaitForFences(mDevice, 1, &mInFlightFences[mCurrentFrameInFlight], VK_TRUE, UINT64_MAX);
 
@@ -331,7 +331,8 @@ void Renderer::beginRecording()
     .swapchain = mSwapchain,
     .timeout = UINT64_MAX,  
     .semaphore = mImageAvailableSemaphores[mCurrentFrameInFlight],
-    .fence = VK_NULL_HANDLE
+    .fence = VK_NULL_HANDLE,
+    .deviceMask = 1
   };
 
   VkResult result = vkAcquireNextImage2KHR(mDevice, &acquireInfo, &mCurrentImageIndex);
@@ -350,10 +351,121 @@ void Renderer::beginRecording()
   };
 
   vkBeginCommandBuffer(mCommandBuffers[mCurrentFrameInFlight], &beginInfo);
+
+  VkImageMemoryBarrier2 barrier {
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+    .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+    .srcAccessMask = VK_ACCESS_2_NONE,
+    .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+    .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+    .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    .image = mSwapchainImages[mCurrentImageIndex],
+    .subresourceRange{
+      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .baseMipLevel = 0,
+      .levelCount = 1,
+      .baseArrayLayer = 0,
+      .layerCount = 1,
+    }
+  };
+  
+  VkDependencyInfo depInfo {
+    .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+    .imageMemoryBarrierCount = 1,
+    .pImageMemoryBarriers = &barrier,
+  };
+
+  vkCmdPipelineBarrier2(mCommandBuffers[mCurrentFrameInFlight], &depInfo);
+  VkViewport viewport{
+    .x = 0,
+    .y = 0,
+    .width = static_cast<float>(mSwapchainExtent.width),
+    .height = static_cast<float>(mSwapchainExtent.height),
+    .minDepth = 0.0f, 
+    .maxDepth = 1.0f
+  };
+  VkRect2D scissor{
+    .offset = {0, 0},
+    .extent = mSwapchainExtent
+  };
+
+  vkCmdSetViewport(mCommandBuffers[mCurrentFrameInFlight], 0, 1, &viewport);
+  vkCmdSetScissor(mCommandBuffers[mCurrentFrameInFlight], 0, 1, &scissor);
+
+  return mCommandBuffers[mCurrentFrameInFlight];
 }
 
+void Renderer::beginRendering()
+{
+  VkRenderingAttachmentInfo attInfo{
+    .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+    .pNext = nullptr,
+    .imageView = mSwapchainImageViews[mCurrentImageIndex],
+    .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    .resolveMode = VK_RESOLVE_MODE_NONE,
+    .resolveImageView = VK_NULL_HANDLE,
+    .resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+    .clearValue = {
+      .color = {{0.0f, 0.0f, 0.0f, 1.0f}}
+    }
+  };
+
+  VkRenderingInfo renderingInfo{
+    .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+    .pNext = nullptr,
+    .flags = 0,
+    .renderArea = {
+      .offset = {0,0},
+      .extent = mSwapchainExtent
+    },
+    .layerCount = 1,
+    .viewMask = 0,
+    .colorAttachmentCount = 1,
+    .pColorAttachments = &attInfo,
+    .pDepthAttachment = nullptr,
+    .pStencilAttachment = nullptr 
+  };
+
+  vkCmdBeginRendering(mCommandBuffers[mCurrentFrameInFlight], &renderingInfo);
+
+}
 void Renderer::endAndSubmit()
 {
+  vkCmdEndRendering(mCommandBuffers[mCurrentFrameInFlight]);
+
+  VkImageMemoryBarrier2 barrier{
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+    .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+    .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+    .dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+    .dstAccessMask = VK_ACCESS_2_NONE,
+    .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    .image = mSwapchainImages[mCurrentImageIndex],
+    .subresourceRange{
+      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+      .baseMipLevel = 0,
+      .levelCount = 1,
+      .baseArrayLayer = 0,
+      .layerCount = 1
+    }
+  };
+
+  VkDependencyInfo depInfo{
+    .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+    .imageMemoryBarrierCount = 1,
+    .pImageMemoryBarriers = &barrier
+  };
+
+  vkCmdPipelineBarrier2(mCommandBuffers[mCurrentFrameInFlight], &depInfo);
+
   if(vkEndCommandBuffer(mCommandBuffers[mCurrentFrameInFlight]) != VK_SUCCESS)
     throw std::runtime_error("Failed to end command buffer!");
 
@@ -389,11 +501,13 @@ void Renderer::endAndSubmit()
   if(vkQueueSubmit2(mGraphicsQueue, 1, &submitInfo, mInFlightFences[mCurrentFrameInFlight]) != VK_SUCCESS)
     throw std::runtime_error("Failed to submit command buffer to graphics queue!");
 
+
   VkPresentInfoKHR presentInfo{
     .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
     .pNext = nullptr,
     .waitSemaphoreCount = 1,
     .pWaitSemaphores = &mRenderFinishedSemaphores[mCurrentFrameInFlight],
+    .swapchainCount = 1,
     .pSwapchains = &mSwapchain,
     .pImageIndices = &mCurrentImageIndex,
   };
@@ -615,6 +729,33 @@ void Renderer::createSwapchain(GLFWwindow* window)
   mSwapchainImages.resize(imageCount);
   vkGetSwapchainImagesKHR(mDevice, mSwapchain, &imageCount, mSwapchainImages.data());
 
+  mSwapchainImageViews.resize(mSwapchainImages.size());
+  for(int i = 0; i < mSwapchainImageViews.size(); i++)
+  {
+    VkImageViewCreateInfo imageViewCreateInfo{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .image = mSwapchainImages[i],
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = mSwapchainFormat.format,
+      .components{
+        .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+        .a = VK_COMPONENT_SWIZZLE_IDENTITY 
+      },
+      .subresourceRange{
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1 
+      }
+    };
+    if(vkCreateImageView(mDevice, &imageViewCreateInfo, nullptr, &mSwapchainImageViews[i]) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create swapchain image view!");
+  }
   VkImageCreateInfo depthCreateInfo{
     .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
     .imageType = VK_IMAGE_TYPE_2D,
@@ -629,7 +770,7 @@ void Renderer::createSwapchain(GLFWwindow* window)
   };
 
   VmaAllocationCreateInfo imageAllocInfo{
-    .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+    .flags  = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
     .usage = VMA_MEMORY_USAGE_AUTO 
   };
 
@@ -646,6 +787,8 @@ void Renderer::createSwapchain(GLFWwindow* window)
 
   if(vkCreateImageView(mDevice, &imageViewCreateInfo, nullptr, &mDepthImageView) != VK_SUCCESS)
     throw std::runtime_error("Failed to create depth image view.");
+
+  
 }
 void Renderer::createDescriptorPool()
 {
@@ -680,7 +823,8 @@ void Renderer::createDescriptorSetLayout()
     .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
     .pNext = nullptr,
     .flags = 0,
-    
+    .bindingCount = 1,
+    .pBindings = &binding
   };
 
   if(vkCreateDescriptorSetLayout(mDevice, &createInfo, nullptr, &mDescriptorSetLayout) != VK_SUCCESS)

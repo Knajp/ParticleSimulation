@@ -31,6 +31,28 @@ namespace part
 
   }
 
+  void ParticleManager::transferIntoVertex(VkCommandBuffer cb)
+  { 
+    
+  VkBufferMemoryBarrier2 barrier {
+    .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+    .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, 
+    .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT, 
+    .dstAccessMask = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
+    .buffer = mParticleBuffer,
+    .offset = 0,
+    .size = VK_WHOLE_SIZE 
+  };
+
+  VkDependencyInfo dependency{
+    .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+    .bufferMemoryBarrierCount = 1,
+    .pBufferMemoryBarriers = &barrier 
+  };
+
+  vkCmdPipelineBarrier2(cb, &dependency);
+  }
   void ParticleManager::createParticleBuffer()
   {
     VkBufferCreateInfo createInfo{

@@ -58,6 +58,8 @@ namespace rend
       createDescriptorSetLayout();
       createDescriptorSets();
       mGraphicsPipeline = createGraphicsPipeline(mVertexShaderModule, mFragmentShaderModule, mGraphicsPipelineLayout);
+      createSynchronizationResources();
+      createCommandBuffers();
     }
    
     void Step()
@@ -102,7 +104,8 @@ namespace rend
     
     void drawStorageBuffer(VkBuffer buffer, uint32_t vertexCount) const;
 
-    void beginRecording();
+    VkCommandBuffer beginRecording();
+    void beginRendering();
     void endAndSubmit();
   private:
 
