@@ -174,8 +174,9 @@ namespace part
 
     pushConstants pcValues {
       .init = mInit,
-      .screenSize = {width, height},
-      .padding = UINT32_MAX
+      ._padding = UINT32_MAX,
+      .screenWidth = static_cast<float>(width),
+      .screenHeight = static_cast<float>(height)
     };
 
     if(mInit == 1) mInit = 0;
@@ -201,7 +202,7 @@ namespace part
 
     vkCmdPushConstants2(mCommandBuffer, &pcInfo);
 
-    vkCmdDispatch(mCommandBuffer, (mParticleCount + 255) / 266, 0, 0); // NOLINT
+    vkCmdDispatch(mCommandBuffer, (mParticleCount + 255) / 266, 1, 1); // NOLINT
 
     vkEndCommandBuffer(mCommandBuffer);
 

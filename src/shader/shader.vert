@@ -1,4 +1,5 @@
 #version 450
+#extension GL_ARB_point_coord : enable
 
 struct Particle 
 {
@@ -17,7 +18,11 @@ void main()
 {
   Particle p = particles[gl_VertexIndex];
 
-  gl_Position = vec4(p.position, 0.0, 1.0);
+  vec2 centered = gl_PointCoord - vec2(0.5);
 
+  if(length(centered) > 0.5) discard;
+
+  gl_Position = vec4(p.position, 0.0, 1.0);
+  gl_PointSize = 8.0;
   vertexColor = vec4(p.color, 1.0);
 }

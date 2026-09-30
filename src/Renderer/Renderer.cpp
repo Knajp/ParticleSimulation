@@ -482,7 +482,7 @@ void Renderer::endAndSubmit()
 
   VkSemaphoreSubmitInfo signalInfo {
     .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-    .semaphore = mRenderFinishedSemaphores[mCurrentFrameInFlight],
+    .semaphore = mRenderFinishedSemaphores[mCurrentImageIndex],
     .stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT
   };
 
@@ -506,7 +506,7 @@ void Renderer::endAndSubmit()
     .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
     .pNext = nullptr,
     .waitSemaphoreCount = 1,
-    .pWaitSemaphores = &mRenderFinishedSemaphores[mCurrentFrameInFlight],
+    .pWaitSemaphores = &mRenderFinishedSemaphores[mCurrentImageIndex],
     .swapchainCount = 1,
     .pSwapchains = &mSwapchain,
     .pImageIndices = &mCurrentImageIndex,
@@ -519,7 +519,7 @@ void Renderer::endAndSubmit()
 void Renderer::createSynchronizationResources()
 {
   mImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-  mRenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+  mRenderFinishedSemaphores.resize(mSwapchainImages.size());
   mInFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
   VkSemaphoreCreateInfo semaphoreInfo{
@@ -533,10 +533,13 @@ void Renderer::createSynchronizationResources()
   for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
   {
     if(vkCreateSemaphore(mDevice, &semaphoreInfo, nullptr, &mImageAvailableSemaphores[i]) != VK_SUCCESS ||
-       vkCreateSemaphore(mDevice, &semaphoreInfo, nullptr, &mRenderFinishedSemaphores[i]) != VK_SUCCESS ||
        vkCreateFence(mDevice, &fenceInfo, nullptr, &mInFlightFences[i]) != VK_SUCCESS)
       throw std::runtime_error("Failed to create sync resources!");
   }
+
+  for(int i = 0; i < mSwapchainImages.size(); i++)
+    if(vkCreateSemaphore(mDevice, &semaphoreInfo, nullptr, &mRenderFinishedSemaphores[i]) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create render finished semaphore!");
 }
 void Renderer::createGraphicsShaderModules()
 {

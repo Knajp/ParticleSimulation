@@ -20,9 +20,14 @@ namespace part
   struct pushConstants
   {
     uint32_t init;
-    glm::vec2 screenSize;
-    uint32_t padding;
+    uint32_t _padding;
+    float screenWidth;
+    float screenHeight;
   };
+  static_assert(offsetof(pushConstants, screenWidth) == 8);
+  static_assert(offsetof(pushConstants, screenHeight) == 12);
+  static_assert(sizeof(pushConstants) == 16);
+
   class ParticleManager
   {
   public:
@@ -85,7 +90,7 @@ namespace part
     VkBuffer mParticleBuffer;
     VmaAllocation mParticleAllocation;    
 
-    static constexpr uint32_t mParticleCount = 100'000;
+    static constexpr uint32_t mParticleCount = 1000;
     uint32_t mInit = 1;
 
     VkDevice mDevice;
