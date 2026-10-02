@@ -13,7 +13,7 @@ void Window::init()
   int width = videoMode->width;
   int height = videoMode->height;
 
-  pWindow = glfwCreateWindow(width, height, "Particle Simulation", nullptr, nullptr);  
+  pWindow = glfwCreateWindow(width, height, "Particle Simulation", monitor, nullptr);  
 }
 
 void Window::init(const int width, const int height)

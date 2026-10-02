@@ -22,6 +22,8 @@ namespace app
       run();
       terminate();
     }
+    
+    void WindowResize();
   private:
     void init();
     void run();

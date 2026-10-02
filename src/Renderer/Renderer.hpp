@@ -7,6 +7,7 @@
 
 #include <optional>
 #include <vector>
+#include <glm/glm.hpp>
 #include <limits>
 #include <string>
 
@@ -35,6 +36,11 @@ namespace rend
     std::vector<VkPresentModeKHR> presentModes;
   };
 
+  struct UniformBufferObject
+  {
+    glm::mat4 proj;
+  };
+
   class Renderer
   {
   public:
@@ -60,6 +66,8 @@ namespace rend
       mGraphicsPipeline = createGraphicsPipeline(mVertexShaderModule, mFragmentShaderModule, mGraphicsPipelineLayout);
       createSynchronizationResources();
       createCommandBuffers();
+      createUniformBuffer();
+      writeUniformBuffer();
     }
    
     void Step()
@@ -106,7 +114,9 @@ namespace rend
 
     VkCommandBuffer beginRecording();
     void beginRendering();
-    void endAndSubmit();
+    void endAndSubmit(GLFWwindow* window);
+
+    void signalFramebufferResize() {mFramebufferResized = true;}
   private:
 
     static constexpr int MAX_FRAMES_IN_FLIGHT = 3;
@@ -130,12 +140,21 @@ namespace rend
     void createCommandBuffers();
     void createGraphicsShaderModules();
 
+    void recreateSwapchain(GLFWwindow* window);
+    void cleanupSwapchain();
+
     void createSynchronizationResources();
     VkPipeline createGraphicsPipeline(VkShaderModule vertexShaderModule, VkShaderModule fragmentShaderModule, VkPipelineLayout& pipelineLayout) const;
 
     void createDescriptorPool();
     void createDescriptorSetLayout();
     void createDescriptorSets();
+
+    void createUniformBuffer();
+    void writeUniformBuffer();
+
+    VkCommandBuffer beginSingleTimeCommands();
+    void endSingleTimeCommands(VkCommandBuffer cb);
 
     VkInstance mInstance;
     VmaAllocator mVmaAllocator;
@@ -184,6 +203,11 @@ namespace rend
     std::vector<VkSemaphore> mImageAvailableSemaphores;
     std::vector<VkSemaphore> mRenderFinishedSemaphores;
     std::vector<VkFence> mInFlightFences;
+
+    VkBuffer mUniformBuffer;
+    VmaAllocation mUniformAllocation;
+
+    bool mFramebufferResized = false;
   };
 }
 

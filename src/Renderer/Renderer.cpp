@@ -6,6 +6,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
+#include <glm/gtc/matrix_transform.hpp>
 
 namespace rend {
 #ifdef DEBUG
@@ -281,6 +282,158 @@ void Renderer::createCommandBuffers()
     throw std::runtime_error("Failed to create transfer buffer!");
 }
 
+void Renderer::createUniformBuffer()
+{
+  VkBufferCreateInfo createInfo{
+    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = 0,
+    .size = sizeof(UniformBufferObject),
+    .usage = VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_2_TRANSFER_DST_BIT_KHR,
+    .sharingMode = VK_SHARING_MODE_EXCLUSIVE 
+  };
+
+  VmaAllocationCreateInfo allocInfo{
+    .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE
+  };
+
+  if(vmaCreateBuffer(mVmaAllocator, &createInfo, &allocInfo, &mUniformBuffer, &mUniformAllocation, nullptr) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create uniform buffer!");
+
+
+}
+
+void Renderer::writeUniformBuffer()
+{
+
+  VkBufferCreateInfo stagingInfo{
+    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+    .pNext = nullptr,
+    .flags = 0,
+    .size = sizeof(UniformBufferObject),
+    .usage = VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT,
+    .sharingMode = VK_SHARING_MODE_EXCLUSIVE 
+  };
+
+  VmaAllocationCreateInfo stagingAllocInfo{
+    .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+    .usage = VMA_MEMORY_USAGE_AUTO,
+    .requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
+  };
+
+  VkBuffer stagingBuffer;
+  VmaAllocation stagingAllocation;
+
+  if(vmaCreateBuffer(mVmaAllocator, &stagingInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, nullptr) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create staging buffer!");
+
+  float aspectRatio = static_cast<float>(mSwapchainExtent.width) / static_cast<float>(mSwapchainExtent.height);
+
+  UniformBufferObject ubo{
+    .proj = glm::ortho(-aspectRatio, aspectRatio, 1.0f, -1.0f)
+  };
+
+  void* data;
+  vmaMapMemory(mVmaAllocator, stagingAllocation, &data);
+  
+  memcpy(data, &ubo, sizeof(ubo));
+
+  vmaUnmapMemory(mVmaAllocator, stagingAllocation);
+
+  auto* cb = beginSingleTimeCommands();
+
+  VkBufferCopy2 copyRegion{
+    .sType = VK_STRUCTURE_TYPE_BUFFER_COPY_2,
+    .srcOffset = 0,
+    .dstOffset = 0,
+    .size = sizeof(UniformBufferObject)
+  };
+
+  VkCopyBufferInfo2 copyInfo{
+    .sType = VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2,
+    .srcBuffer = stagingBuffer, 
+    .dstBuffer = mUniformBuffer,
+    .regionCount = 1,
+    .pRegions = &copyRegion
+  };
+
+  vkCmdCopyBuffer2(cb, &copyInfo);
+
+  endSingleTimeCommands(cb);
+}
+
+void Renderer::recreateSwapchain(GLFWwindow* window)
+{
+  vkDeviceWaitIdle(mDevice);
+
+  int width, height;
+  glfwGetFramebufferSize(window, &width, &height);
+  while(width == 0 || height == 0)
+  {
+    glfwGetFramebufferSize(window, &width, &height);
+    glfwWaitEvents();
+  }
+  cleanupSwapchain();
+
+  createSwapchain(window);
+  createSwapchainImageViews();
+}
+
+void Renderer::cleanupSwapchain()
+{
+
+  for(auto* imageView : mSwapchainImageViews)
+    vkDestroyImageView(mDevice, imageView, nullptr);
+  mSwapchainImageViews.clear();
+
+  vkDestroySwapchainKHR(mDevice, mSwapchain, nullptr);
+  mSwapchainImages.clear();
+}
+VkCommandBuffer Renderer::beginSingleTimeCommands()
+{
+  VkCommandBuffer cb;
+  VkCommandBufferAllocateInfo allocInfo{
+    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+    .commandPool = mCommandPool,
+    .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+    .commandBufferCount = 1,
+  };
+
+  if(vkAllocateCommandBuffers(mDevice, &allocInfo, &cb) != VK_SUCCESS)
+    throw std::runtime_error("Failed to create single time command buffer!");
+
+  VkCommandBufferBeginInfo beginInfo{
+    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+  };
+
+  vkBeginCommandBuffer(cb, &beginInfo);
+
+  return cb;
+}
+
+void Renderer::endSingleTimeCommands(VkCommandBuffer cb)
+{
+  vkEndCommandBuffer(cb);
+
+  VkCommandBufferSubmitInfo cbInfo{
+    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+    .commandBuffer = cb,
+    .deviceMask = 0
+  };
+
+  VkSubmitInfo2 submitInfo{
+    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+    .pNext = nullptr,
+    .flags = 0,
+    .commandBufferInfoCount = 1,
+    .pCommandBufferInfos = &cbInfo,
+  };
+
+  if(vkQueueSubmit2(mTransferQueue, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+    throw std::runtime_error("Failed to submit to transfer queue!");
+
+  vkQueueWaitIdle(mTransferQueue);
+}
 void Renderer::drawStorageBuffer(VkBuffer buffer, uint32_t vertexCount) const
 {
 
@@ -291,6 +444,12 @@ void Renderer::drawStorageBuffer(VkBuffer buffer, uint32_t vertexCount) const
     .offset = 0,
     .range = VK_WHOLE_SIZE 
   };
+  VkDescriptorBufferInfo uniformBufferInfo{
+    .buffer = mUniformBuffer,
+    .offset = 0,
+    .range = VK_WHOLE_SIZE 
+  };
+
   VkWriteDescriptorSet write {
     .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
     .pNext = nullptr,
@@ -301,8 +460,20 @@ void Renderer::drawStorageBuffer(VkBuffer buffer, uint32_t vertexCount) const
     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
     .pBufferInfo = &bufferInfo
   };
+  VkWriteDescriptorSet write2{
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+    .pNext = nullptr, 
+    .dstSet = mDescriptorSet,
+    .dstBinding = 1,
+    .dstArrayElement = 0,
+    .descriptorCount = 1,
+    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+    .pBufferInfo = &uniformBufferInfo 
+  };
 
-  vkUpdateDescriptorSets(mDevice, 1, &write, 0, nullptr);
+  VkWriteDescriptorSet writes[] = {write, write2};
+
+  vkUpdateDescriptorSets(mDevice, 2, writes, 0, nullptr);
 
   VkBindDescriptorSetsInfo bindInfo{
     .sType = VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_SETS_INFO,
@@ -434,7 +605,7 @@ void Renderer::beginRendering()
   vkCmdBeginRendering(mCommandBuffers[mCurrentFrameInFlight], &renderingInfo);
 
 }
-void Renderer::endAndSubmit()
+void Renderer::endAndSubmit(GLFWwindow* window)
 {
   vkCmdEndRendering(mCommandBuffers[mCurrentFrameInFlight]);
 
@@ -512,8 +683,12 @@ void Renderer::endAndSubmit()
     .pImageIndices = &mCurrentImageIndex,
   };
 
-  vkQueuePresentKHR(mPresentQueue, &presentInfo);
+  VkResult result = vkQueuePresentKHR(mPresentQueue, &presentInfo);
 
+  if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || mFramebufferResized)
+    {recreateSwapchain(window); mFramebufferResized = false;}
+  else if(result != VK_SUCCESS)
+    throw std::runtime_error("Failed to present");
   mCurrentFrameInFlight = (mCurrentFrameInFlight + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 void Renderer::createSynchronizationResources()
@@ -800,13 +975,20 @@ void Renderer::createDescriptorPool()
     .descriptorCount = 1
   };
 
+  VkDescriptorPoolSize uniformPoolSize{
+    .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+    .descriptorCount = 1 
+  };
+
+  VkDescriptorPoolSize poolSizes[] = {poolSize, uniformPoolSize};
+
   VkDescriptorPoolCreateInfo createInfo{
     .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
     .pNext = (void*)0,
     .flags = 0,
     .maxSets = 1, 
-    .poolSizeCount = 1,
-    .pPoolSizes = &poolSize
+    .poolSizeCount = 2, 
+    .pPoolSizes = poolSizes
   };
 
   if(vkCreateDescriptorPool(mDevice, &createInfo, nullptr, &mDescriptorPool) != VK_SUCCESS)
@@ -822,12 +1004,21 @@ void Renderer::createDescriptorSetLayout()
     .pImmutableSamplers = nullptr,
   };
 
+  VkDescriptorSetLayoutBinding uniformBinding {
+    .binding = 1,
+    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+    .descriptorCount = 1 ,
+    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+  };
+
+  VkDescriptorSetLayoutBinding bindings[] = {binding, uniformBinding};
+
   VkDescriptorSetLayoutCreateInfo createInfo{
     .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
     .pNext = nullptr,
     .flags = 0,
-    .bindingCount = 1,
-    .pBindings = &binding
+    .bindingCount = 2,
+    .pBindings = bindings
   };
 
   if(vkCreateDescriptorSetLayout(mDevice, &createInfo, nullptr, &mDescriptorSetLayout) != VK_SUCCESS)

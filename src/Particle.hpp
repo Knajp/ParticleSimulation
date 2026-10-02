@@ -90,7 +90,7 @@ namespace part
     VkBuffer mParticleBuffer;
     VmaAllocation mParticleAllocation;    
 
-    static constexpr uint32_t mParticleCount = 1000;
+    static constexpr uint32_t mParticleCount = 5000;
     uint32_t mInit = 1;
 
     VkDevice mDevice;
