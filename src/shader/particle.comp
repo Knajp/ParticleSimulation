@@ -4,6 +4,7 @@ struct Particle
 {
   vec2 position;
   vec3 color;
+  vec2 velocity;
 };
 
 layout(std430, binding = 0) buffer ParticleBuffer
@@ -61,10 +62,16 @@ void main()
       randomFloat(i + 1),
       randomFloat(i + 2)
     );
-
+    
+    particles[i].velocity = vec2((2 / screenSize.x) / 5, (2 / screenSize.y) / 5);
     return;
   }
 
+  int particleRadius = 4;
+  if(particles[i].position.x + particleRadius * (2/screenSize.x) >= 1 || particles[i].position.x - particleRadius * (2/screenSize.x) <= -1) {particles[i].velocity.x = -particles[i].velocity.x; }
+  if(particles[i].position.y + particleRadius * (2/screenSize.y) >= 1 || particles[i].position.y - particleRadius * (2/screenSize.x) <= -1) {particles[i].velocity.y = -particles[i].velocity.y; }
+
+  particles[i].position += particles[i].velocity;
   // simulation code
 
 }

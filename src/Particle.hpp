@@ -15,6 +15,7 @@ namespace part
   {
     glm::vec2 position;
     glm::vec3 color;
+    glm::vec2 velocity;
   };
  
   struct pushConstants
@@ -90,7 +91,7 @@ namespace part
     VkBuffer mParticleBuffer;
     VmaAllocation mParticleAllocation;    
 
-    static constexpr uint32_t mParticleCount = 5000;
+    static constexpr uint32_t mParticleCount = 100;
     uint32_t mInit = 1;
 
     VkDevice mDevice;
