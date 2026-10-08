@@ -2,6 +2,7 @@
 #include "Renderer/Shader.hpp"
 
 #include <stdexcept>
+#include <chrono>
 
 namespace part
 {
@@ -53,6 +54,46 @@ namespace part
 
   vkCmdPipelineBarrier2(cb, &dependency);
   }
+
+  void ParticleManager::createNextParticleBuffer()
+  {
+    VkBufferCreateInfo createInfo{
+      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .size = mParticleCount * sizeof(int),
+      .usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE 
+    };
+    
+    VmaAllocationCreateInfo allocationCreateInfo{
+      .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE
+    };
+
+    if(vmaCreateBuffer(mAllocator, &createInfo, &allocationCreateInfo, &mNextBuffer, &mNextAllocation, nullptr) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create next particle buffer!");
+  }
+  void ParticleManager::createCellHeadBuffer()
+  {
+    uint16_t gridHeight = 50, gridWidth = 50;
+
+    VkBufferCreateInfo createInfo{
+      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .size = gridHeight * gridWidth * sizeof(int),
+      .usage = VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE 
+    };
+
+    VmaAllocationCreateInfo allocationCreateInfo{
+      .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE
+    };
+
+    if(vmaCreateBuffer(mAllocator, &createInfo, &allocationCreateInfo, &mCellHeadBuffer, &mCellHeadAllocation, nullptr) != VK_SUCCESS)
+      throw std::runtime_error("Failed to create cell head buffer!");
+  }
+
   void ParticleManager::createParticleBuffer()
   {
     VkBufferCreateInfo createInfo{
@@ -131,7 +172,42 @@ namespace part
       .pBufferInfo = &bufferInfo,
     };
 
-    vkUpdateDescriptorSets(mDevice, 1, &write, 0, nullptr);
+    VkDescriptorBufferInfo cellHeadBufferInfo{
+      .buffer = mCellHeadBuffer,
+      .offset = 0,
+      .range = VK_WHOLE_SIZE
+    };
+
+    VkWriteDescriptorSet write2{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .pNext = nullptr,
+      .dstSet = mDescriptorSet,
+      .dstBinding = 1,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &cellHeadBufferInfo 
+    };
+    
+    VkDescriptorBufferInfo nextBufferInfo{
+      .buffer = mNextBuffer,
+      .offset = 0,
+      .range = VK_WHOLE_SIZE 
+    };
+
+    VkWriteDescriptorSet write3{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .pNext = nullptr,
+      .dstSet = mDescriptorSet,
+      .dstBinding = 2,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &nextBufferInfo 
+    };
+
+    VkWriteDescriptorSet writes[] = {write, write2, write3};
+    vkUpdateDescriptorSets(mDevice, 3, writes, 0, nullptr);
   }
 
   void ParticleManager::createWaitFence()
@@ -172,14 +248,18 @@ namespace part
     int width, height; // NOLINT
     glfwGetFramebufferSize(pWindow, &width, &height);
 
+    static auto previousTime = std::chrono::high_resolution_clock::now();
+    auto currentTime = std::chrono::high_resolution_clock::now();
     pushConstants pcValues {
       .init = mInit,
       ._padding = UINT32_MAX,
       .screenWidth = static_cast<float>(width),
-      .screenHeight = static_cast<float>(height)
+      .screenHeight = static_cast<float>(height),
+      .deltaTime = std::chrono::duration<float>(currentTime - previousTime).count()
     };
+    previousTime = currentTime;
 
-    if(mInit == 1) mInit = 0;
+    if(mInit < 2) mInit++;
 
     VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
@@ -202,7 +282,10 @@ namespace part
 
     vkCmdPushConstants2(mCommandBuffer, &pcInfo);
 
-    vkCmdDispatch(mCommandBuffer, (mParticleCount + 255) / 266, 1, 1); // NOLINT
+    if(mInit == 0)
+      vkCmdDispatch(mCommandBuffer, (100 * 100 + 256 - 1) / 256, 1, 1);
+    else
+      vkCmdDispatch(mCommandBuffer, (mParticleCount + 255) / 266, 1, 1); // NOLINT
 
     vkEndCommandBuffer(mCommandBuffer);
 
@@ -232,11 +315,28 @@ namespace part
       .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, 
       .pImmutableSamplers = nullptr
     };
+    
+    VkDescriptorSetLayoutBinding cellHeadBinding{
+      .binding = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+      .pImmutableSamplers = nullptr 
+    };
+    
+    VkDescriptorSetLayoutBinding nextBinding{
+      .binding = 2,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+      .pImmutableSamplers = nullptr 
+    };
 
+    VkDescriptorSetLayoutBinding bindings[] = {binding, cellHeadBinding, nextBinding};
     VkDescriptorSetLayoutCreateInfo createInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-      .bindingCount = 1,
-      .pBindings = &binding,
+      .bindingCount = 3,
+      .pBindings = bindings,
     };
 
     if(vkCreateDescriptorSetLayout(mDevice, &createInfo, nullptr, &mSetLayout) != VK_SUCCESS)
@@ -248,12 +348,24 @@ namespace part
       .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .descriptorCount = 1 
     };
+    
+    VkDescriptorPoolSize cellHeadSize{
+      .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .descriptorCount = 1
+    };
+
+    VkDescriptorPoolSize nextSize{
+      .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .descriptorCount = 1 
+    };
+
+    VkDescriptorPoolSize poolSizes[] = {poolSize, cellHeadSize, nextSize};
 
     VkDescriptorPoolCreateInfo createInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
       .maxSets = 1,
-      .poolSizeCount = 1,
-      .pPoolSizes = &poolSize
+      .poolSizeCount = 3,
+      .pPoolSizes = poolSizes
     };
 
     if(vkCreateDescriptorPool(mDevice, &createInfo, nullptr, &mDescriptorPool) != VK_SUCCESS)

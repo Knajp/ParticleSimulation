@@ -11,22 +11,29 @@
 
 namespace part
 {
-  struct Particle
+  struct alignas(16) Particle
   {
     glm::vec2 position;
+    float _pad0[2];
     glm::vec3 color;
+    float _pad1;
+    glm::vec2 velocity;
+    float _pad2[2];
   };
- 
+
+  static_assert(sizeof(Particle) == 48);
+
   struct pushConstants
   {
     uint32_t init;
     uint32_t _padding;
     float screenWidth;
     float screenHeight;
+    float deltaTime;
   };
   static_assert(offsetof(pushConstants, screenWidth) == 8);
   static_assert(offsetof(pushConstants, screenHeight) == 12);
-  static_assert(sizeof(pushConstants) == 16);
+  static_assert(sizeof(pushConstants) == 20);
 
   class ParticleManager
   {
@@ -44,6 +51,8 @@ namespace part
       mQueue = computeQueue;
 
       createParticleBuffer();
+      createCellHeadBuffer();
+      createNextParticleBuffer();
       createParticleSetLayout();
       createDescriptorPool();
       createDescriptorSet();
@@ -72,6 +81,9 @@ namespace part
     }
   private:
     void createParticleBuffer();
+    void createCellHeadBuffer();
+    void createNextParticleBuffer();
+
     VkPipeline createComputePipeline( VkShaderModule computeShaderModule, const std::vector<VkPushConstantRange>& pcRanges, const std::vector<VkDescriptorSetLayout>& setLayouts, VkPipelineLayout& pipelineLayout) const;
 
     void createParticleSetLayout();
@@ -89,8 +101,13 @@ namespace part
 
     VkBuffer mParticleBuffer;
     VmaAllocation mParticleAllocation;    
+    
+    VkBuffer mCellHeadBuffer;
+    VmaAllocation mCellHeadAllocation;
 
-    static constexpr uint32_t mParticleCount = 5000;
+    VkBuffer mNextBuffer;
+    VmaAllocation mNextAllocation;
+    static constexpr uint32_t mParticleCount = 500;
     uint32_t mInit = 1;
 
     VkDevice mDevice;
