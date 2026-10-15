@@ -24,10 +24,11 @@ namespace part
     uint32_t _padding;
     float screenWidth;
     float screenHeight;
+    float deltaTime;
   };
   static_assert(offsetof(pushConstants, screenWidth) == 8);
   static_assert(offsetof(pushConstants, screenHeight) == 12);
-  static_assert(sizeof(pushConstants) == 16);
+  static_assert(sizeof(pushConstants) == 20);
 
   class ParticleManager
   {
@@ -45,6 +46,9 @@ namespace part
       mQueue = computeQueue;
 
       createParticleBuffer();
+      createTemporaryParticleBuffer();
+      createCellHeadBuffer();
+      createNextParticleBuffer();
       createParticleSetLayout();
       createDescriptorPool();
       createDescriptorSet();
@@ -73,6 +77,7 @@ namespace part
     }
   private:
     void createParticleBuffer();
+    void createTemporaryParticleBuffer();
     VkPipeline createComputePipeline( VkShaderModule computeShaderModule, const std::vector<VkPushConstantRange>& pcRanges, const std::vector<VkDescriptorSetLayout>& setLayouts, VkPipelineLayout& pipelineLayout) const;
 
     void createParticleSetLayout();
@@ -83,6 +88,9 @@ namespace part
     void writeDescriptorSet();
     void createWaitFence();
     
+    void createCellHeadBuffer();
+    void createNextParticleBuffer();
+
     void createCommandBuffer(uint32_t computeFamilyIndex);
 
     void invokeComputeShader(GLFWwindow* pWindow);
@@ -90,8 +98,16 @@ namespace part
 
     VkBuffer mParticleBuffer;
     VmaAllocation mParticleAllocation;    
+    
+    VkBuffer mTemporaryParticleBuffer;
+    VmaAllocation mTemporaryParticleAllocation;
 
-    static constexpr uint32_t mParticleCount = 100;
+    VkBuffer mCellHeadBuffer;
+    VmaAllocation mCellHeadAllocation;
+
+    VkBuffer mNextParticleBuffer;
+    VmaAllocation mNextParticleAllocation;
+    static constexpr uint32_t mParticleCount = 2'000;
     uint32_t mInit = 1;
 
     VkDevice mDevice;
@@ -107,6 +123,7 @@ namespace part
     VkCommandBuffer mCommandBuffer;
     VkFence mWaitFence;
     VkQueue mQueue;
+
   };
 }
 #endif 
