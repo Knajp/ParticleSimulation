@@ -12,3 +12,7 @@ A GPU-accelerated particle simulation built with C++ and Vulkan.
 - C++
 - Vulkan
 - GLSL 450
+
+## Launch Instructions
+**Linux Only**
+Download particleSimulation.tar.gz from the Releases page, unpack it, double click the .AppImage file.
