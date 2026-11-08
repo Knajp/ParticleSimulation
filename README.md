@@ -19,4 +19,4 @@ Add mouse interactions.
 
 ## Launch Instructions
 **Linux Only**
-Download particleSimulation.tar.gz from the Releases page, unpack it, double click the .AppImage file.
+Download particleSimulation.tar.gz from the Releases page, unpack it, ``chmod +x`` the .AppImage, double click the .AppImage file.
