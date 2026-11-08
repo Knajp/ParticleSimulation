@@ -1,6 +1,9 @@
 # Particle Simulation
 
-A GPU-accelerated particle simulation built with C++ and Vulkan.
+A GPU-accelerated particle simulation built with C++ and Vulkan. Spawns about 2000 particles all over the screen in an uniform grid, then applies gravity and collisions. Renders and simulates 100'000 particles at 120 FPS on RX 9070 XT.
+
+## Todo
+Add mouse interactions.
 
 ## Features
 - Compute shader-based particle physics
@@ -12,6 +15,7 @@ A GPU-accelerated particle simulation built with C++ and Vulkan.
 - C++
 - Vulkan
 - GLSL 450
+- CMake
 
 ## Launch Instructions
 **Linux Only**
